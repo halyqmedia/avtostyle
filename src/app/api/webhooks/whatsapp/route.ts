@@ -124,7 +124,8 @@ export async function POST(req: NextRequest) {
     } else {
       const deal = await prisma.deal.create({
         data: {
-          title: parsed.text ? parsed.text.slice(0, 80) : `WhatsApp лид — ${parsed.senderName}`,
+          // Temporary placeholder — the assigned manager renames it once they've spoken to the client.
+          title: parsed.phone,
           clientId: client.id,
           amount: 0,
           pipelineStageId: defaultStage.id,
