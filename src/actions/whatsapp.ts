@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { assertDealAccess } from "@/lib/deal-access";
-import { sendWhatsAppMessage, toWhatsAppChatId } from "@/lib/green-api";
+import { sendWhatsAppMessage, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
 
 export async function sendDealWhatsAppMessage(dealId: string, body: string) {
   const { session, deal } = await assertDealAccess(dealId);
@@ -11,10 +11,10 @@ export async function sendDealWhatsAppMessage(dealId: string, body: string) {
   if (!trimmed) throw new Error("Хабарлама бос болмауы керек");
 
   const client = await prisma.client.findUnique({ where: { id: deal.clientId } });
-  const chatId = toWhatsAppChatId(client?.whatsappId ?? null, client?.phone ?? null);
-  if (!chatId) throw new Error("Клиенттің WhatsApp/телефон нөмірі көрсетілмеген");
+  const recipient = toWhatsAppRecipient(client?.whatsappId ?? null, client?.phone ?? null);
+  if (!recipient) throw new Error("Клиенттің WhatsApp/телефон нөмірі көрсетілмеген");
 
-  const { idMessage } = await sendWhatsAppMessage(chatId, trimmed);
+  const { idMessage } = await sendWhatsAppMessage(recipient, trimmed);
 
   await prisma.whatsAppMessage.create({
     data: {

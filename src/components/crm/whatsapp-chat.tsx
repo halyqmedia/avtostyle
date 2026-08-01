@@ -15,6 +15,15 @@ export type WhatsAppMessageItem = {
   body: string;
   createdAt: string;
   sentByName: string | null;
+  status?: string | null;
+  errorMessage?: string | null;
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  SENT: "жіберілді",
+  DELIVERED: "жеткізілді",
+  READ: "оқылды",
+  FAILED: "жеткізілмеді",
 };
 
 export function WhatsAppChat({
@@ -71,7 +80,18 @@ export function WhatsAppChat({
               <p className="px-1 text-[11px] text-muted-foreground">
                 {m.direction === "OUT" ? (m.sentByName ?? "Маман") : clientName} ·{" "}
                 {format(new Date(m.createdAt), "dd.MM.yyyy HH:mm")}
+                {m.direction === "OUT" && m.status && STATUS_LABEL[m.status] && (
+                  <>
+                    {" · "}
+                    <span className={m.status === "FAILED" ? "text-destructive" : undefined}>
+                      {STATUS_LABEL[m.status]}
+                    </span>
+                  </>
+                )}
               </p>
+              {m.direction === "OUT" && m.status === "FAILED" && m.errorMessage && (
+                <p className="px-1 text-[11px] text-destructive">{m.errorMessage}</p>
+              )}
             </div>
           ))}
         </div>

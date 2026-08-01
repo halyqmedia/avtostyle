@@ -163,11 +163,14 @@ model WhatsAppMessage {
   direction         String // "IN" | "OUT"
   body              String
   whatsappMessageId String?
+  status            String   @default("SENT") // SENT | DELIVERED | READ | FAILED — synced from Cloud API status webhooks
+  errorMessage      String?
   sentById          String?
   sentBy            User?    @relation(fields: [sentById], references: [id])
   createdAt         DateTime @default(now())
 
   @@index([dealId])
+  @@index([whatsappMessageId])
   @@map("whatsapp_messages")
 }
 

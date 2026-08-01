@@ -57,6 +57,8 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
           body: m.body,
           createdAt: m.createdAt.toISOString(),
           sentByName: m.sentBy?.name ?? null,
+          status: m.status,
+          errorMessage: m.errorMessage,
         }))
       : deal.source === "whatsapp" && deal.comment
         ? [
@@ -66,6 +68,8 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
               body: deal.comment,
               createdAt: deal.createdAt.toISOString(),
               sentByName: null,
+              status: "DELIVERED",
+              errorMessage: null,
             },
           ]
         : [];
