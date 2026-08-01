@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
 import { MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +42,12 @@ export function WhatsAppChat({
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
   const link = buildWhatsAppLink(phone);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   function send() {
     const trimmed = draft.trim();
@@ -61,7 +67,7 @@ export function WhatsAppChat({
       {messages.length === 0 ? (
         <p className="text-sm text-muted-foreground">Әзірге хабарлама жоқ.</p>
       ) : (
-        <div className="flex max-h-96 flex-col gap-2 overflow-y-auto rounded-lg bg-muted/10 p-2">
+        <div ref={listRef} className="flex h-80 flex-col gap-2 overflow-y-auto rounded-lg bg-muted/10 p-2">
           {messages.map((m) => (
             <div
               key={m.id}
