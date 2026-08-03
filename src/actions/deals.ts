@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
 import { writeStageHistory } from "@/lib/stage-history";
 import { assertDealAccess } from "@/lib/deal-access";
+import { normalizePhone } from "@/lib/phone";
 
 const createDealSchema = z.object({
   title: z.string().min(2, "Атауын енгізіңіз"),
@@ -34,6 +35,9 @@ export async function createDeal(_prevState: FormState, formData: FormData): Pro
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Деректер дұрыс емес" };
 
+  const phone = normalizePhone(parsed.data.clientPhone);
+  if (!phone) return { error: "Телефон нөмірі дұрыс емес" };
+
   const canAssign = session.user.permissions.includes(PERMISSIONS.DEALS_ASSIGN);
   const assignedToId = canAssign ? parsed.data.assignedToId : session.user.id;
 
@@ -42,13 +46,17 @@ export async function createDeal(_prevState: FormState, formData: FormData): Pro
   });
   if (!defaultStage) return { error: "Pipeline кезеңдері бапталмаған" };
 
-  const client = await prisma.client.create({
-    data: {
-      fullName: parsed.data.clientFullName,
-      phone: parsed.data.clientPhone,
-      source: "manual",
-    },
-  });
+  // Reuse the existing client if this phone number is already known (WhatsApp lead,
+  // earlier deal, etc.) instead of spawning a duplicate — one phone == one client.
+  const client =
+    (await prisma.client.findUnique({ where: { phone } })) ??
+    (await prisma.client.create({
+      data: {
+        fullName: parsed.data.clientFullName,
+        phone,
+        source: "manual",
+      },
+    }));
 
   await prisma.deal.create({
     data: {

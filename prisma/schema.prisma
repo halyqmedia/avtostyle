@@ -87,7 +87,7 @@ model PipelineStage {
 model Client {
   id         String   @id @default(cuid())
   fullName   String
-  phone      String?
+  phone      String?  @unique
   whatsappId String?
   email      String?
   source     String?

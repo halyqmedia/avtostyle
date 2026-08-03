@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { downloadWhatsAppMedia } from "@/lib/whatsapp-cloud";
 import { uploadMedia } from "@/lib/media-storage";
+import { normalizePhone } from "@/lib/phone";
 
 /**
  * Meta WhatsApp Cloud API webhook (https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks).
@@ -138,11 +139,16 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
   const systemUser = await prisma.user.findFirst({ where: { role: { key: "ADMIN" } } });
   if (!defaultStage || !systemUser) return undefined;
 
-  let client = await prisma.client.findFirst({ where: { whatsappId: waId } });
+  const phone = normalizePhone(waId) ?? `+${waId}`;
+  let client = await prisma.client.findUnique({ where: { phone } });
   if (!client) {
     client = await prisma.client.create({
-      data: { fullName: senderName, phone: `+${waId}`, whatsappId: waId, source: "whatsapp" },
+      data: { fullName: senderName, phone, whatsappId: waId, source: "whatsapp" },
     });
+  } else if (client.whatsappId !== waId) {
+    // wa_id format changed (e.g. Green API "xxx@c.us" -> Cloud API "xxx") — heal it so this
+    // client keeps matching by phone regardless of which API last touched their whatsappId.
+    client = await prisma.client.update({ where: { id: client.id }, data: { whatsappId: waId } });
   }
 
   const existingActiveDeal = await prisma.deal.findFirst({
