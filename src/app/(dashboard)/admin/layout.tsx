@@ -6,6 +6,7 @@ const TABS = [
   { href: "/admin/users", label: "Қызметкерлер" },
   { href: "/admin/roles", label: "Рөлдер мен доступ" },
   { href: "/admin/pipeline-stages", label: "Pipeline кезеңдері" },
+  { href: "/admin/quick-replies", label: "Жылдам жауаптар" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

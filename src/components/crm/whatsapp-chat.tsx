@@ -2,12 +2,20 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { sendDealWhatsAppMessage } from "@/actions/whatsapp";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+
+export type QuickReplyItem = { id: string; title: string; body: string };
 
 export type WhatsAppMessageItem = {
   id: string;
@@ -32,12 +40,14 @@ export function WhatsAppChat({
   phone,
   messages,
   canSend,
+  quickReplies = [],
 }: {
   dealId: string;
   clientName: string;
   phone: string | null;
   messages: WhatsAppMessageItem[];
   canSend: boolean;
+  quickReplies?: QuickReplyItem[];
 }) {
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
@@ -122,6 +132,26 @@ export function WhatsAppChat({
             <Button size="sm" disabled={pending || !draft.trim()} onClick={send}>
               {pending ? "Жіберілуде..." : "Жіберу"}
             </Button>
+            {quickReplies.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost">
+                    <Zap className="size-4" />
+                    Жылдам жауап
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {quickReplies.map((qr) => (
+                    <DropdownMenuItem
+                      key={qr.id}
+                      onSelect={() => setDraft((prev) => (prev.trim() ? `${prev}\n${qr.body}` : qr.body))}
+                    >
+                      {qr.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {link && (
               <Button asChild size="sm" variant="ghost">
                 <a href={link} target="_blank" rel="noopener noreferrer">

@@ -38,6 +38,7 @@ async function main() {
     PERMISSIONS.DEALS_CREATE,
     PERMISSIONS.DEALS_MOVE,
     PERMISSIONS.ADMIN_PIPELINE_MANAGE,
+    PERMISSIONS.ADMIN_QUICK_REPLIES_MANAGE,
   ];
 
   const roleDefs: { key: string; label: string; isSystem: boolean; permKeys: string[] }[] = [
@@ -178,6 +179,17 @@ async function main() {
         source: "manual",
       },
     });
+  }
+
+  console.log("Seeding quick replies...");
+  const quickReplyDefs = [
+    { title: "Сәлемдесу", body: "Сәлеметсіз бе! Avtostyle-ға хабарласқаныңыз үшін рахмет. Сізге қалай көмектесе аламын?" },
+    { title: "Бағаны сұрау", body: "Дәл қазір бағаны нақтылап, сізге хабарлаймын, сәл күте тұрыңызшы." },
+    { title: "Дайын, алуға болады", body: "Тапсырысыңыз дайын болды, алуға келе аласыз." },
+  ];
+  for (const q of quickReplyDefs) {
+    const existing = await prisma.quickReply.findFirst({ where: { title: q.title } });
+    if (!existing) await prisma.quickReply.create({ data: q });
   }
 
   console.log("Seed complete. Dev password for all seeded users:", DEV_PASSWORD);

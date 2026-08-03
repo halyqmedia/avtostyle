@@ -28,7 +28,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   const canAssign = hasPermission(session.user.permissions, PERMISSIONS.DEALS_ASSIGN);
   const isAdmin = session.user.roleKey === "ADMIN";
 
-  const [history, stages, notes, products, salesUsers, whatsappMessages] = await Promise.all([
+  const [history, stages, notes, products, salesUsers, whatsappMessages, quickReplies] = await Promise.all([
     prisma.stageHistory.findMany({
       where: { entityType: "DEAL", entityId: deal.id },
       include: { fromStage: true, toStage: true, movedBy: true },
@@ -47,6 +47,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       include: { sentBy: true },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.quickReply.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
 
   const chatMessages =
@@ -134,6 +135,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
             phone={deal.client.phone}
             messages={chatMessages}
             canSend={canMove && Boolean(deal.client.whatsappId || deal.client.phone)}
+            quickReplies={quickReplies.map((q) => ({ id: q.id, title: q.title, body: q.body }))}
           />
         </CardContent>
       </Card>

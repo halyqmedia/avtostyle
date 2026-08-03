@@ -192,6 +192,17 @@ model StageHistory {
   @@map("stage_history")
 }
 
+/// Canned response a manager can insert into the WhatsApp draft with one click.
+model QuickReply {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("quick_replies")
+}
+
 /// Raw log of inbound webhook payloads (WhatsApp lead intake), for debugging/replay.
 model InboundWebhookEvent {
   id         String   @id @default(cuid())
