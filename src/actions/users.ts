@@ -76,6 +76,22 @@ export async function updateUserCommissionRate(userId: string, rate: number | nu
   revalidatePath(`/admin/users/${userId}`);
 }
 
+export async function updateUserName(userId: string, name: string) {
+  await requirePermission(PERMISSIONS.ADMIN_USERS_MANAGE);
+  const trimmed = name.trim();
+  if (trimmed.length < 2) throw new Error("Аты кемінде 2 таңба болуы керек");
+  await prisma.user.update({ where: { id: userId }, data: { name: trimmed } });
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+}
+
+export async function updateUserPhone(userId: string, phone: string) {
+  await requirePermission(PERMISSIONS.ADMIN_USERS_MANAGE);
+  await prisma.user.update({ where: { id: userId }, data: { phone: phone.trim() || null } });
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+}
+
 export async function resetUserPassword(userId: string, newPassword: string) {
   await requirePermission(PERMISSIONS.ADMIN_USERS_MANAGE);
   if (newPassword.length < 6) throw new Error("Құпия сөз кемінде 6 таңба болуы керек");

@@ -19,6 +19,8 @@ import { UserRowActions } from "@/components/admin/user-row-actions";
 import { EmployeePhotoForm } from "@/components/admin/employee-photo-form";
 import { ResetPasswordForm } from "@/components/admin/reset-password-form";
 import { MonthlyBarChart } from "@/components/admin/monthly-bar-chart";
+import { InlineEditText } from "@/components/crm/inline-edit-text";
+import { updateUserName, updateUserPhone } from "@/actions/users";
 
 function formatMoney(n: number) {
   return new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₸";
@@ -90,12 +92,23 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         </CardHeader>
         <CardContent className="flex flex-col gap-4 text-sm">
           <div className="grid grid-cols-2 gap-3">
+            <InlineEditText
+              label="Аты-жөні"
+              value={user.name}
+              onSave={updateUserName.bind(null, user.id)}
+            />
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-muted-foreground">Логин (email)</span>
+              <span className="text-muted-foreground">Логин (email)</span>
               <span className="font-medium">{user.email}</span>
             </div>
+            <InlineEditText
+              label="Телефон"
+              value={user.phone ?? ""}
+              displayValue={user.phone ?? "—"}
+              onSave={updateUserPhone.bind(null, user.id)}
+            />
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-muted-foreground">Тіркелген күні</span>
+              <span className="text-muted-foreground">Тіркелген күні</span>
               <span>{format(user.createdAt, "dd.MM.yyyy")}</span>
             </div>
           </div>
