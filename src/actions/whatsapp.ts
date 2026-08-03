@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { assertDealAccess } from "@/lib/deal-access";
 import { sendWhatsAppMessage, sendWhatsAppMedia, uploadWhatsAppMedia, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
 import { uploadMedia } from "@/lib/media-storage";
+import { remuxWebmOpusToOgg } from "@/lib/audio-transcode";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const META_AUDIO_TYPES = new Set(["audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg"]);
@@ -46,9 +47,10 @@ export async function sendDealWhatsAppFile(dealId: string, formData: FormData) {
   const recipient = toWhatsAppRecipient(client?.whatsappId ?? null, client?.phone ?? null);
   if (!recipient) throw new Error("Клиенттің WhatsApp/телефон нөмірі көрсетілмеген");
 
-  // Voice recordings come in as browser-native webm/opus, which Meta's "audio" message
-  // type doesn't accept — sent as a document instead so delivery is reliable, but we still
-  // label it "audio" in our own UI so the chat renders it with a player, not a file icon.
+  // Voice recordings come in as browser-native Opus-in-WebM, which Meta's media
+  // upload rejects outright (not in its accepted mime list for any message type).
+  // Re-mux (not re-encode) the same Opus stream into Ogg — the container Meta wants
+  // for voice notes — so it sends as a real playable "audio" message, not a document.
   const isVoiceNote = formData.get("isVoiceNote") === "1";
   const messageType = isVoiceNote
     ? "audio"
@@ -59,13 +61,20 @@ export async function sendDealWhatsAppFile(dealId: string, formData: FormData) {
         : META_VIDEO_TYPES.has(file.type)
           ? "video"
           : "document";
-  const sendKind = isVoiceNote ? "document" : (messageType as "image" | "document" | "audio" | "video");
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const mediaId = await uploadWhatsAppMedia(buffer, file.type || "application/octet-stream");
-  const { idMessage } = await sendWhatsAppMedia(recipient, sendKind, mediaId, { filename: file.name });
+  let buffer: Buffer = Buffer.from(await file.arrayBuffer());
+  let mimeType = file.type || "application/octet-stream";
+  if (isVoiceNote) {
+    buffer = await remuxWebmOpusToOgg(buffer);
+    mimeType = "audio/ogg";
+  }
 
-  const bucketKey = await uploadMedia(`whatsapp/out/${idMessage}`, buffer, file.type || "application/octet-stream");
+  const mediaId = await uploadWhatsAppMedia(buffer, mimeType);
+  const { idMessage } = await sendWhatsAppMedia(recipient, messageType as "image" | "document" | "audio" | "video", mediaId, {
+    filename: file.name,
+  });
+
+  const bucketKey = await uploadMedia(`whatsapp/out/${idMessage}`, buffer, mimeType);
 
   await prisma.whatsAppMessage.create({
     data: {
@@ -74,7 +83,7 @@ export async function sendDealWhatsAppFile(dealId: string, formData: FormData) {
       body: "",
       messageType,
       mediaUrl: bucketKey,
-      mediaMimeType: file.type || null,
+      mediaMimeType: mimeType,
       fileName: isVoiceNote ? null : file.name,
       whatsappMessageId: idMessage,
       sentById: session.user.id,
