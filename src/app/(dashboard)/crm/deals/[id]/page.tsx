@@ -12,6 +12,7 @@ import { DealNotes } from "@/components/crm/deal-notes";
 import { DealInfoCard } from "@/components/crm/deal-info-card";
 import { getMediaUrl } from "@/lib/media-storage";
 import { CreateProductionOrderDialog } from "@/components/crm/create-production-order-dialog";
+import { DealAiToggle } from "@/components/crm/deal-ai-toggle";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
@@ -74,6 +75,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
             mediaSrc: m.mediaUrl ? await getMediaUrl(m.mediaUrl) : null,
             mediaMimeType: m.mediaMimeType,
             fileName: m.fileName,
+            aiGenerated: m.aiGenerated,
           })),
         )
       : deal.source === "whatsapp" && deal.comment
@@ -90,6 +92,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
               mediaSrc: null,
               mediaMimeType: null,
               fileName: null,
+              aiGenerated: false,
             },
           ]
         : [];
@@ -172,8 +175,9 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">WhatsApp</CardTitle>
+          {canMove && <DealAiToggle dealId={deal.id} aiEnabled={deal.aiEnabled} />}
         </CardHeader>
         <CardContent>
           <WhatsAppChat

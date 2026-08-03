@@ -29,6 +29,7 @@ export type WhatsAppMessageItem = {
   mediaSrc?: string | null;
   mediaMimeType?: string | null;
   fileName?: string | null;
+  aiGenerated?: boolean;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -163,7 +164,7 @@ export function WhatsAppChat({
                 {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
               </div>
               <p className="px-1 text-[11px] text-muted-foreground">
-                {m.direction === "OUT" ? (m.sentByName ?? "Маман") : clientName} ·{" "}
+                {m.direction === "OUT" ? (m.aiGenerated ? "ИИ агент" : (m.sentByName ?? "Маман")) : clientName} ·{" "}
                 {format(new Date(m.createdAt), "dd.MM.yyyy HH:mm")}
                 {m.direction === "OUT" && m.status && STATUS_LABEL[m.status] && (
                   <>

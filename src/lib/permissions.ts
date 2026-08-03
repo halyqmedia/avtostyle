@@ -15,6 +15,7 @@ export const PERMISSIONS = {
   FINANCE_MANAGE: "finance.manage",
   WAREHOUSE_ACCESS: "warehouse.access",
   WAREHOUSE_MANAGE: "warehouse.manage",
+  ADMIN_AI_MANAGE: "admin.ai.manage",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -47,6 +48,11 @@ export const PERMISSION_DEFINITIONS: {
     key: PERMISSIONS.WAREHOUSE_MANAGE,
     label: "Складты басқару (тауар, жабдықтаушы, заказ, түзету)",
     module: "warehouse",
+  },
+  {
+    key: PERMISSIONS.ADMIN_AI_MANAGE,
+    label: "ИИ агентті басқару (WhatsApp авто-сату)",
+    module: "admin",
   },
 ];
 

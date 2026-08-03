@@ -31,6 +31,7 @@ model User {
   stockMovements     StockMovement[]
   transactionsAbout  Transaction[]     @relation("TransactionUser")
   transactionsLogged Transaction[]     @relation("TransactionCreator")
+  aiSettingsUpdates  AiSettings[]
 
   @@map("users")
 }
@@ -287,6 +288,7 @@ model Deal {
   createdBy       User          @relation("DealCreator", fields: [createdById], references: [id])
   source          String?
   comment         String?
+  aiEnabled       Boolean       @default(true) // AI agent auto-replies on WhatsApp while true; a manager can take over any time
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -331,11 +333,29 @@ model WhatsAppMessage {
   errorMessage      String?
   sentById          String?
   sentBy            User?    @relation(fields: [sentById], references: [id])
+  aiGenerated       Boolean  @default(false)
+  promptTokens      Int? // Gemini usageMetadata, only set on aiGenerated messages — for cost tracking
+  completionTokens  Int?
   createdAt         DateTime @default(now())
 
   @@index([dealId])
   @@index([whatsappMessageId])
   @@map("whatsapp_messages")
+}
+
+/// Singleton (id = "default") config for the WhatsApp AI sales agent.
+model AiSettings {
+  id                 String   @id @default("default")
+  enabled            Boolean  @default(false) // global kill switch — off until reviewed and turned on deliberately
+  systemPrompt       String // business context, tone, sales script, handoff rules
+  model              String   @default("gemini-3.5-flash-lite")
+  maxHistoryMessages Int      @default(10) // chat turns sent as context — keeps prompts (and cost) small
+  maxOutputTokens    Int      @default(300)
+  updatedAt          DateTime @updatedAt
+  updatedById        String?
+  updatedBy          User?    @relation(fields: [updatedById], references: [id])
+
+  @@map("ai_settings")
 }
 
 /// Generic audit trail, reused for ProductionOrder etc. in later phases.

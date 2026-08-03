@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { downloadWhatsAppMedia } from "@/lib/whatsapp-cloud";
 import { uploadMedia } from "@/lib/media-storage";
 import { normalizePhone } from "@/lib/phone";
+import { maybeSendAiReply } from "@/lib/ai-agent";
 
 /**
  * Meta WhatsApp Cloud API webhook (https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks).
@@ -189,6 +190,16 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
       status: "DELIVERED",
     },
   });
+
+  if (msg.type === "text") {
+    // Best-effort: an AI/WhatsApp-send failure here must not mark this inbound message
+    // (already safely stored above) as a failed webhook event.
+    try {
+      await maybeSendAiReply(dealId);
+    } catch (err) {
+      console.error("AI agent reply failed:", err);
+    }
+  }
 
   return dealId;
 }
