@@ -10,6 +10,7 @@ import { DealStageSelect } from "@/components/crm/deal-stage-select";
 import { WhatsAppChat } from "@/components/crm/whatsapp-chat";
 import { DealNotes } from "@/components/crm/deal-notes";
 import { DealInfoCard } from "@/components/crm/deal-info-card";
+import { getMediaUrl } from "@/lib/media-storage";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
@@ -52,15 +53,21 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
 
   const chatMessages =
     whatsappMessages.length > 0
-      ? whatsappMessages.map((m) => ({
-          id: m.id,
-          direction: m.direction as "IN" | "OUT",
-          body: m.body,
-          createdAt: m.createdAt.toISOString(),
-          sentByName: m.sentBy?.name ?? null,
-          status: m.status,
-          errorMessage: m.errorMessage,
-        }))
+      ? await Promise.all(
+          whatsappMessages.map(async (m) => ({
+            id: m.id,
+            direction: m.direction as "IN" | "OUT",
+            body: m.body,
+            createdAt: m.createdAt.toISOString(),
+            sentByName: m.sentBy?.name ?? null,
+            status: m.status,
+            errorMessage: m.errorMessage,
+            messageType: m.messageType,
+            mediaSrc: m.mediaUrl ? await getMediaUrl(m.mediaUrl) : null,
+            mediaMimeType: m.mediaMimeType,
+            fileName: m.fileName,
+          })),
+        )
       : deal.source === "whatsapp" && deal.comment
         ? [
             {
@@ -71,6 +78,10 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
               sentByName: null,
               status: "DELIVERED",
               errorMessage: null,
+              messageType: "text",
+              mediaSrc: null,
+              mediaMimeType: null,
+              fileName: null,
             },
           ]
         : [];

@@ -162,6 +162,10 @@ model WhatsAppMessage {
   deal              Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
   direction         String // "IN" | "OUT"
   body              String
+  messageType       String   @default("text") // text | image | document | audio | video
+  mediaUrl          String? // our bucket URL — Meta's own media links expire after 5 days
+  mediaMimeType     String?
+  fileName          String?
   whatsappMessageId String?
   status            String   @default("SENT") // SENT | DELIVERED | READ | FAILED — synced from Cloud API status webhooks
   errorMessage      String?

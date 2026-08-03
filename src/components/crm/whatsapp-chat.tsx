@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
-import { MessageCircle, Zap } from "lucide-react";
+import { MessageCircle, Zap, Paperclip, Mic, Square } from "lucide-react";
 import { toast } from "sonner";
-import { sendDealWhatsAppMessage } from "@/actions/whatsapp";
+import { sendDealWhatsAppMessage, sendDealWhatsAppFile } from "@/actions/whatsapp";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,10 @@ export type WhatsAppMessageItem = {
   sentByName: string | null;
   status?: string | null;
   errorMessage?: string | null;
+  messageType?: string;
+  mediaSrc?: string | null;
+  mediaMimeType?: string | null;
+  fileName?: string | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -51,8 +55,12 @@ export function WhatsAppChat({
 }) {
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
+  const [recording, setRecording] = useState(false);
   const link = buildWhatsAppLink(phone);
   const listRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -70,6 +78,45 @@ export function WhatsAppChat({
         toast.error(e instanceof Error ? e.message : "Хабарлама жіберілмеді");
       }
     });
+  }
+
+  function sendFile(file: File, isVoiceNote = false) {
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        if (isVoiceNote) formData.append("isVoiceNote", "1");
+        await sendDealWhatsAppFile(dealId, formData);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Файл жіберілмеді");
+      }
+    });
+  }
+
+  async function toggleRecording() {
+    if (recording) {
+      mediaRecorderRef.current?.stop();
+      setRecording(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        sendFile(new File([blob], "dauys-hab.webm", { type: blob.type }), true);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      toast.error("Микрофонға рұқсат берілмеді");
+    }
   }
 
   return (
@@ -91,7 +138,29 @@ export function WhatsAppChat({
                     : "border bg-background",
                 )}
               >
-                <p className="whitespace-pre-wrap">{m.body}</p>
+                {m.messageType === "image" && m.mediaSrc ? (
+                  <a href={m.mediaSrc} target="_blank" rel="noopener noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- short-lived presigned S3 URL, next/image optimization adds no value here */}
+                    <img
+                      src={m.mediaSrc}
+                      alt={m.fileName ?? "сурет"}
+                      className="max-h-64 max-w-full rounded-md object-contain"
+                    />
+                  </a>
+                ) : m.messageType === "audio" && m.mediaSrc ? (
+                  <audio controls src={m.mediaSrc} className="h-9 max-w-[240px]" />
+                ) : m.messageType && m.messageType !== "text" && m.mediaSrc ? (
+                  <a
+                    href={m.mediaSrc}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 underline underline-offset-2"
+                  >
+                    <Paperclip className="size-3.5 shrink-0" />
+                    {m.fileName ?? "Файл"}
+                  </a>
+                ) : null}
+                {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
               </div>
               <p className="px-1 text-[11px] text-muted-foreground">
                 {m.direction === "OUT" ? (m.sentByName ?? "Маман") : clientName} ·{" "}
@@ -128,10 +197,43 @@ export function WhatsAppChat({
             rows={2}
             className="w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" disabled={pending || !draft.trim()} onClick={send}>
               {pending ? "Жіберілуде..." : "Жіберу"}
             </Button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) sendFile(file);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              disabled={pending || recording}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="size-4" />
+              Файл
+            </Button>
+
+            <Button
+              size="sm"
+              variant={recording ? "destructive" : "ghost"}
+              type="button"
+              disabled={pending && !recording}
+              onClick={toggleRecording}
+            >
+              {recording ? <Square className="size-4" /> : <Mic className="size-4" />}
+              {recording ? "Тоқтату" : "Дауыс"}
+            </Button>
+
             {quickReplies.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

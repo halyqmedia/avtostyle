@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { downloadWhatsAppMedia } from "@/lib/whatsapp-cloud";
+import { uploadMedia } from "@/lib/media-storage";
 
 /**
  * Meta WhatsApp Cloud API webhook (https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks).
@@ -36,11 +38,17 @@ function isValidSignature(rawBody: string, signatureHeader: string | null): bool
 
 type CloudContact = { profile?: { name?: string }; wa_id?: string };
 
+type CloudMedia = { id: string; mime_type?: string; caption?: string; filename?: string };
+
 type CloudMessage = {
   from: string;
   id: string;
   type: string;
   text?: { body: string };
+  image?: CloudMedia;
+  document?: CloudMedia;
+  audio?: CloudMedia;
+  video?: CloudMedia;
 };
 
 type CloudStatus = {
@@ -105,12 +113,24 @@ export async function POST(req: NextRequest) {
   }
 }
 
+const MEDIA_KINDS = ["image", "document", "audio", "video"] as const;
+
 async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[]): Promise<string | undefined> {
   const waId = msg.from; // digits only, e.g. "77475960696"
   const senderName = contacts.find((c) => c.wa_id === waId)?.profile?.name || "WhatsApp клиент";
-  // Media types (image/document/audio/...) get a labeled placeholder for now —
-  // downloading and re-hosting Cloud API media is a separate follow-up piece of work.
-  const text = msg.type === "text" ? msg.text?.body : `[${msg.type} хабарлама]`;
+
+  const isMedia = (MEDIA_KINDS as readonly string[]).includes(msg.type);
+  const media = isMedia ? (msg[msg.type as (typeof MEDIA_KINDS)[number]] as CloudMedia | undefined) : undefined;
+
+  let mediaKey: string | undefined;
+  let mediaMimeType: string | undefined;
+  if (media) {
+    const { buffer, mimeType } = await downloadWhatsAppMedia(media.id);
+    mediaKey = await uploadMedia(`whatsapp/in/${msg.id}`, buffer, mimeType);
+    mediaMimeType = mimeType;
+  }
+
+  const text = msg.type === "text" ? msg.text?.body : media?.caption;
 
   const defaultStage = await prisma.pipelineStage.findFirst({
     where: { pipeline: "SALES", isDefault: true },
@@ -151,7 +171,17 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
   }
 
   await prisma.whatsAppMessage.create({
-    data: { dealId, direction: "IN", body: text ?? "", whatsappMessageId: msg.id, status: "DELIVERED" },
+    data: {
+      dealId,
+      direction: "IN",
+      body: text ?? "",
+      messageType: msg.type,
+      mediaUrl: mediaKey,
+      mediaMimeType,
+      fileName: media?.filename,
+      whatsappMessageId: msg.id,
+      status: "DELIVERED",
+    },
   });
 
   return dealId;
