@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -39,7 +40,11 @@ export default async function AdminUsersPage() {
           <TableBody>
             {users.map((u) => (
               <TableRow key={u.id}>
-                <TableCell className="font-medium">{u.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link href={`/admin/users/${u.id}`} className="hover:underline">
+                    {u.name}
+                  </Link>
+                </TableCell>
                 <TableCell className="text-muted-foreground">{u.email}</TableCell>
                 <TableCell>
                   <UserRowActions

@@ -17,6 +17,7 @@ model User {
   role           Role     @relation(fields: [roleId], references: [id])
   isActive       Boolean  @default(true)
   commissionRate Decimal? @db.Decimal(5, 2) // % of each payment they receive as commission (sales staff)
+  photoUrl       String? // bucket key
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
