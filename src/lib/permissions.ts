@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   PRODUCTION_ACCESS: "production.access",
   FINANCE_ACCESS: "finance.access",
   WAREHOUSE_ACCESS: "warehouse.access",
+  WAREHOUSE_MANAGE: "warehouse.manage",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -36,6 +37,11 @@ export const PERMISSION_DEFINITIONS: {
   { key: PERMISSIONS.PRODUCTION_ACCESS, label: "Өндіріс модуліне кіру (конвейр)", module: "production" },
   { key: PERMISSIONS.FINANCE_ACCESS, label: "Қаржы модуліне кіру", module: "finance" },
   { key: PERMISSIONS.WAREHOUSE_ACCESS, label: "Склад модуліне кіру", module: "warehouse" },
+  {
+    key: PERMISSIONS.WAREHOUSE_MANAGE,
+    label: "Складты басқару (тауар, жабдықтаушы, заказ, түзету)",
+    module: "warehouse",
+  },
 ];
 
 export function hasPermission(

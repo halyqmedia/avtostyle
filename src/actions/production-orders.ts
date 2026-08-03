@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
 import { uploadMedia } from "@/lib/media-storage";
 import { writeStageHistory } from "@/lib/stage-history";
+import { applyStockMovement } from "@/lib/stock";
 
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
@@ -31,7 +32,12 @@ export async function createProductionOrder(dealId: string | null, formData: For
   const itemCount = Number(formData.get("itemCount") ?? 0);
   if (!Number.isFinite(itemCount) || itemCount < 1) throw new Error("Кемінде бір өнім қосыңыз");
 
-  const items: { productType: string; materialPhotoUrl: string | null }[] = [];
+  const items: {
+    productType: string;
+    materialPhotoUrl: string | null;
+    productId: string | null;
+    quantity: number | null;
+  }[] = [];
   for (let i = 0; i < itemCount; i++) {
     const productType = optionalText(formData, `item_${i}_productType`);
     if (!productType) throw new Error(`${i + 1}-жол: өнім түрін таңдаңыз`);
@@ -47,7 +53,13 @@ export async function createProductionOrder(dealId: string | null, formData: For
         photo.type || "application/octet-stream",
       );
     }
-    items.push({ productType, materialPhotoUrl });
+
+    const productId = optionalText(formData, `item_${i}_productId`);
+    const quantityRaw = formData.get(`item_${i}_quantity`);
+    const quantity = productId && quantityRaw ? Number(quantityRaw) : null;
+    if (productId && !(quantity && quantity > 0)) throw new Error(`${i + 1}-жол: материал санын енгізіңіз`);
+
+    items.push({ productType, materialPhotoUrl, productId, quantity });
   }
 
   const defaultStage = await prisma.pipelineStage.findFirst({
@@ -55,29 +67,61 @@ export async function createProductionOrder(dealId: string | null, formData: For
   });
   if (!defaultStage) throw new Error("Өндіріс pipeline-ы бапталмаған");
 
-  const order = await prisma.productionOrder.create({
-    data: {
-      dealId,
-      clientName,
-      clientPhone,
-      city: optionalText(formData, "city"),
-      address: optionalText(formData, "address"),
-      carBrand: optionalText(formData, "carBrand"),
-      carYear: optionalText(formData, "carYear"),
-      carGeneration: optionalText(formData, "carGeneration"),
-      paymentAmount,
-      paymentType: optionalText(formData, "paymentType"),
-      remainingAmount,
-      note: optionalText(formData, "note"),
-      pipelineStageId: defaultStage.id,
-      createdById: session.user.id,
-      items: { create: items },
+  const defaultWarehouse = await prisma.warehouse.findFirst({ where: { isDefault: true } });
+
+  const orderId = await prisma.$transaction(
+    async (tx) => {
+      const order = await tx.productionOrder.create({
+        data: {
+          dealId,
+          clientName,
+          clientPhone,
+          city: optionalText(formData, "city"),
+          address: optionalText(formData, "address"),
+          carBrand: optionalText(formData, "carBrand"),
+          carYear: optionalText(formData, "carYear"),
+          carGeneration: optionalText(formData, "carGeneration"),
+          paymentAmount,
+          paymentType: optionalText(formData, "paymentType"),
+          remainingAmount,
+          note: optionalText(formData, "note"),
+          pipelineStageId: defaultStage.id,
+          createdById: session.user.id,
+          items: {
+            create: items.map((it) => ({
+              productType: it.productType,
+              materialPhotoUrl: it.materialPhotoUrl,
+              productId: it.productId,
+              quantity: it.quantity,
+            })),
+          },
+        },
+      });
+
+      if (defaultWarehouse) {
+        for (const it of items) {
+          if (!it.productId || !it.quantity) continue;
+          await applyStockMovement(tx, {
+            productId: it.productId,
+            warehouseId: defaultWarehouse.id,
+            type: "OUT",
+            quantity: -it.quantity,
+            reason: "production_order",
+            refId: order.id,
+            createdById: session.user.id,
+          });
+        }
+      }
+
+      return order.id;
     },
-  });
+    { timeout: 15000, maxWait: 10000 },
+  );
 
   revalidatePath("/production");
+  revalidatePath("/warehouse");
   if (dealId) revalidatePath(`/crm/deals/${dealId}`);
-  return order.id;
+  return orderId;
 }
 
 export async function moveProductionOrderStage(orderId: string, toStageId: string, formData?: FormData) {

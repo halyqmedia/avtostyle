@@ -35,18 +35,21 @@ export function CreateProductionOrderDialog({
   defaultClientPhone,
   defaultPaymentAmount,
   defaultRemainingAmount,
+  materials = [],
 }: {
   dealId: string | null;
   defaultClientName?: string;
   defaultClientPhone?: string;
   defaultPaymentAmount?: number;
   defaultRemainingAmount?: number;
+  materials?: { id: string; name: string; unit: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [pending, startTransition] = useTransition();
   const [rows, setRows] = useState<number[]>([0]);
   const nextRowKey = useRef(1);
+  const [materialByRow, setMaterialByRow] = useState<Record<number, string>>({});
 
   function addRow() {
     setRows((prev) => [...prev, nextRowKey.current++]);
@@ -128,25 +131,63 @@ export function CreateProductionOrderDialog({
 
           <div className="flex flex-col gap-2 rounded-lg border p-3">
             <Label>Таңдаған өнім түрі</Label>
-            {rows.map((key, i) => (
-              <div key={key} className="flex items-end gap-2">
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Input name={`item_${i}_productType`} placeholder="Мысалы: EVA ковриктер (алдыңғы+артқы)" required />
+            {rows.map((key, i) => {
+              const selectedMaterialId = materialByRow[key] ?? "none";
+              const selectedMaterial = materials.find((m) => m.id === selectedMaterialId);
+              return (
+                <div key={key} className="flex flex-col gap-2 rounded-md border border-dashed p-2">
+                  <div className="flex items-end gap-2">
+                    <div className="flex flex-1 flex-col gap-1.5">
+                      <Input name={`item_${i}_productType`} placeholder="Мысалы: EVA ковриктер (алдыңғы+артқы)" required />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Input name={`item_${i}_photo`} type="file" accept="image/*" className="w-48 text-xs" />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={rows.length === 1}
+                      onClick={() => removeRow(key)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                  {materials.length > 0 && (
+                    <div className="flex items-end gap-2">
+                      <div className="flex flex-1 flex-col gap-1.5">
+                        <Label className="text-xs text-muted-foreground">Складтан шығатын материал (міндетті емес)</Label>
+                        <Select
+                          value={selectedMaterialId}
+                          onValueChange={(v) => setMaterialByRow((prev) => ({ ...prev, [key]: v }))}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Материал таңдамау" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Материал таңдамау</SelectItem>
+                            {materials.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                {m.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {selectedMaterial && (
+                          <input type="hidden" name={`item_${i}_productId`} value={selectedMaterial.id} />
+                        )}
+                      </div>
+                      {selectedMaterial && (
+                        <div className="flex w-32 flex-col gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Саны ({selectedMaterial.unit})</Label>
+                          <Input name={`item_${i}_quantity`} type="number" min={0} step="0.001" required />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Input name={`item_${i}_photo`} type="file" accept="image/*" className="w-48 text-xs" />
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={rows.length === 1}
-                  onClick={() => removeRow(key)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
             <Button type="button" variant="outline" size="sm" className="self-start" onClick={addRow}>
               <Plus className="size-3.5" />
               Тағы жол қосу

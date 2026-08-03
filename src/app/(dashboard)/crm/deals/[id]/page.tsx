@@ -117,6 +117,9 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                 defaultClientPhone={deal.client.phone ?? undefined}
                 defaultPaymentAmount={prepayment}
                 defaultRemainingAmount={Math.max(amount - prepayment, 0)}
+                materials={products
+                  .filter((p) => p.category === "material")
+                  .map((p) => ({ id: p.id, name: p.name, unit: p.unit }))}
               />
             )}
             <DealStageSelect
