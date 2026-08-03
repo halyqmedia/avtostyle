@@ -8,25 +8,28 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  phone        String?
-  roleId       String
-  role         Role     @relation(fields: [roleId], references: [id])
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  name           String
+  phone          String?
+  roleId         String
+  role           Role     @relation(fields: [roleId], references: [id])
+  isActive       Boolean  @default(true)
+  commissionRate Decimal? @db.Decimal(5, 2) // % of each payment they receive as commission (sales staff)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  dealsAssigned    Deal[]            @relation("DealAssignee")
-  dealsCreated     Deal[]            @relation("DealCreator")
-  stageMoves       StageHistory[]
-  dealNotes        DealNote[]
-  whatsappMessages WhatsAppMessage[]
-  productionOrders ProductionOrder[] @relation("ProductionOrderCreator")
-  purchaseOrders   PurchaseOrder[]
-  stockMovements   StockMovement[]
+  dealsAssigned      Deal[]            @relation("DealAssignee")
+  dealsCreated       Deal[]            @relation("DealCreator")
+  stageMoves         StageHistory[]
+  dealNotes          DealNote[]
+  whatsappMessages   WhatsAppMessage[]
+  productionOrders   ProductionOrder[] @relation("ProductionOrderCreator")
+  purchaseOrders     PurchaseOrder[]
+  stockMovements     StockMovement[]
+  transactionsAbout  Transaction[]     @relation("TransactionUser")
+  transactionsLogged Transaction[]     @relation("TransactionCreator")
 
   @@map("users")
 }
@@ -171,7 +174,8 @@ model PurchaseOrder {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  items PurchaseOrderItem[]
+  items        PurchaseOrderItem[]
+  transactions Transaction[]
 
   @@index([supplierId])
   @@index([warehouseId])
@@ -231,6 +235,40 @@ model StockMovement {
   @@map("stock_movements")
 }
 
+/// Generic income/expense ledger entry — the single source of truth ОПиУ/P&L, the
+/// per-employee monthly report, and the (simplified) balance sheet are all computed from.
+/// Auto-posted from: Deal payments (sales_payment), sales commission (commission),
+/// purchase-order receiving (material_purchase). Manually posted for everything else
+/// (rent, utilities, salary, other).
+model Transaction {
+  id          String   @id @default(cuid())
+  type        String // "INCOME" | "EXPENSE"
+  category    String // sales_payment | commission | material_purchase | salary | rent | utilities | other
+  amount      Decimal  @db.Decimal(12, 2) // always positive; `type` gives the sign
+  description String?
+  date        DateTime @default(now()) // accounting date — lets manual entries be backdated
+
+  dealId            String?
+  deal              Deal?            @relation(fields: [dealId], references: [id])
+  productionOrderId String?
+  productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  purchaseOrderId   String?
+  purchaseOrder     PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+
+  userId String? // employee this entry is about (commission/salary)
+  user   User?   @relation("TransactionUser", fields: [userId], references: [id])
+
+  createdById String
+  createdBy   User     @relation("TransactionCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([type, category])
+  @@index([date])
+  @@index([dealId])
+  @@index([userId])
+  @@map("transactions")
+}
+
 model Deal {
   id              String        @id @default(cuid())
   title           String
@@ -254,6 +292,7 @@ model Deal {
   notes            DealNote[]
   whatsappMessages WhatsAppMessage[]
   productionOrders ProductionOrder[]
+  transactions     Transaction[]
 
   @@index([assignedToId])
   @@index([pipelineStageId])
@@ -342,7 +381,8 @@ model ProductionOrder {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  items ProductionOrderItem[]
+  items        ProductionOrderItem[]
+  transactions Transaction[]
 
   @@index([pipelineStageId])
   @@index([dealId])
@@ -392,14 +432,8 @@ model InboundWebhookEvent {
 }
 
 // -----------------------------------------------------------------------
-// Phase 3 model (not implemented yet, documented here as an extension
-// point so schema changes for it are additive, not disruptive):
-//
-// Phase 3 - Finance:
-//   model Transaction { ... income/expense ledger entries, linked to Deal
-//     and Product, feeds ОПиУ / cash-flow reports and margin dashboards. }
-//
-// Warehouse (Phase 4) is implemented: Warehouse, Supplier, PurchaseOrder(+Item),
-// Stock, StockMovement above. Commission/BonusPenalty per-manager ledgers are
-// still unimplemented extension points for a later wholesale phase.
+// Finance (Phase 3) and Warehouse (Phase 4) are both implemented now:
+// Transaction above is the income/expense ledger (ОПиУ/P&L, per-employee
+// commission report, simplified balance sheet all read from it); Warehouse,
+// Supplier, PurchaseOrder(+Item), Stock, StockMovement cover the warehouse side.
 // -----------------------------------------------------------------------

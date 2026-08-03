@@ -59,3 +59,12 @@ export async function toggleUserActive(userId: string, isActive: boolean) {
   await prisma.user.update({ where: { id: userId }, data: { isActive } });
   revalidatePath("/admin/users");
 }
+
+export async function updateUserCommissionRate(userId: string, rate: number | null) {
+  await requirePermission(PERMISSIONS.ADMIN_USERS_MANAGE);
+  if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100)) {
+    throw new Error("Комиссия пайызы 0-100 аралығында болуы керек");
+  }
+  await prisma.user.update({ where: { id: userId }, data: { commissionRate: rate } });
+  revalidatePath("/admin/users");
+}

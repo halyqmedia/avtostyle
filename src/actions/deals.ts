@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { writeStageHistory } from "@/lib/stage-history";
 import { assertDealAccess } from "@/lib/deal-access";
 import { normalizePhone } from "@/lib/phone";
+import { postSalesPayment } from "@/lib/transactions";
 
 const createDealSchema = z.object({
   title: z.string().min(2, "Атауын енгізіңіз"),
@@ -58,18 +59,32 @@ export async function createDeal(_prevState: FormState, formData: FormData): Pro
       },
     }));
 
-  await prisma.deal.create({
-    data: {
-      title: parsed.data.title,
-      clientId: client.id,
-      productId: parsed.data.productId || null,
-      amount: parsed.data.amount,
-      prepayment: parsed.data.prepayment,
-      pipelineStageId: defaultStage.id,
-      assignedToId: assignedToId || null,
-      createdById: session.user.id,
-      source: "manual",
-    },
+  const finalAssignedToId = assignedToId || null;
+
+  await prisma.$transaction(async (tx) => {
+    const deal = await tx.deal.create({
+      data: {
+        title: parsed.data.title,
+        clientId: client.id,
+        productId: parsed.data.productId || null,
+        amount: parsed.data.amount,
+        prepayment: parsed.data.prepayment,
+        pipelineStageId: defaultStage.id,
+        assignedToId: finalAssignedToId,
+        createdById: session.user.id,
+        source: "manual",
+      },
+    });
+
+    if (parsed.data.prepayment > 0) {
+      await postSalesPayment(tx, {
+        amount: parsed.data.prepayment,
+        dealId: deal.id,
+        assignedToId: finalAssignedToId,
+        createdById: session.user.id,
+        description: "Бастапқы төлем",
+      });
+    }
   });
 
   revalidatePath("/crm");
@@ -155,9 +170,24 @@ export async function updateDealAmount(dealId: string, amount: number) {
 }
 
 export async function updateDealPrepayment(dealId: string, prepayment: number) {
-  await assertDealEditAccess(dealId);
+  const { session, deal } = await assertDealEditAccess(dealId);
   if (!Number.isFinite(prepayment) || prepayment < 0) throw new Error("Сома дұрыс емес");
-  await prisma.deal.update({ where: { id: dealId }, data: { prepayment } });
+
+  const delta = prepayment - Number(deal.prepayment);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.deal.update({ where: { id: dealId }, data: { prepayment } });
+    if (delta > 0) {
+      await postSalesPayment(tx, {
+        amount: delta,
+        dealId,
+        assignedToId: deal.assignedToId,
+        createdById: session.user.id,
+        description: "Қосымша төлем",
+      });
+    }
+  });
+
   revalidatePath(`/crm/deals/${dealId}`);
   revalidatePath("/crm");
 }

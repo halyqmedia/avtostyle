@@ -1,7 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
-import { updateUserRole, toggleUserActive } from "@/actions/users";
+import { useState, useTransition } from "react";
+import { updateUserRole, toggleUserActive, updateUserCommissionRate } from "@/actions/users";
 import {
   Select,
   SelectContent,
@@ -10,19 +10,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function UserRowActions({
   userId,
   roleId,
   isActive,
+  commissionRate,
   roles,
 }: {
   userId: string;
   roleId: string;
   isActive: boolean;
+  commissionRate: number | null;
   roles: { id: string; label: string }[];
 }) {
   const [pending, startTransition] = useTransition();
+  const [rate, setRate] = useState(commissionRate !== null ? String(commissionRate) : "");
 
   return (
     <div className="flex items-center gap-2">
@@ -50,6 +54,22 @@ export function UserRowActions({
       >
         {isActive ? "Белсенді" : "Өшірулі"}
       </Button>
+      <Input
+        value={rate}
+        onChange={(e) => setRate(e.target.value)}
+        onBlur={() => {
+          const parsed = rate.trim() === "" ? null : Number(rate);
+          if (parsed !== null && !Number.isFinite(parsed)) return;
+          startTransition(() => updateUserCommissionRate(userId, parsed));
+        }}
+        placeholder="Комиссия %"
+        type="number"
+        min={0}
+        max={100}
+        step="0.1"
+        className="h-8 w-24"
+        disabled={pending}
+      />
     </div>
   );
 }

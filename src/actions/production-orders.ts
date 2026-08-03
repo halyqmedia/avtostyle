@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { uploadMedia } from "@/lib/media-storage";
 import { writeStageHistory } from "@/lib/stage-history";
 import { applyStockMovement } from "@/lib/stock";
+import { postTransaction } from "@/lib/transactions";
 
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
@@ -97,6 +98,21 @@ export async function createProductionOrder(dealId: string | null, formData: For
           },
         },
       });
+
+      // Orders opened straight from Production (no linked Deal) have no other income
+      // record — their payment is the only trace of the sale, so post it here.
+      // Deal-linked orders skip this: that revenue is already posted via the deal's
+      // own prepayment (see actions/deals.ts) and would otherwise be double-counted.
+      if (!dealId && paymentAmount > 0) {
+        await postTransaction(tx, {
+          type: "INCOME",
+          category: "sales_payment",
+          amount: paymentAmount,
+          productionOrderId: order.id,
+          description: "Өндіріс заявкасы бойынша төлем",
+          createdById: session.user.id,
+        });
+      }
 
       if (defaultWarehouse) {
         for (const it of items) {

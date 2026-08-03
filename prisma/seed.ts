@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { PERMISSION_DEFINITIONS, PERMISSIONS } from "../src/lib/permissions";
 import { applyStockMovement } from "../src/lib/stock";
+import { postSalesPayment, postTransaction } from "../src/lib/transactions";
 
 const prisma = new PrismaClient();
 
@@ -149,6 +150,7 @@ async function main() {
     PERMISSIONS.WAREHOUSE_ACCESS,
     PERMISSIONS.WAREHOUSE_MANAGE,
   ];
+  const financePermKeys = [PERMISSIONS.FINANCE_ACCESS, PERMISSIONS.FINANCE_MANAGE];
 
   const roleDefs: {
     key: string;
@@ -181,7 +183,7 @@ async function main() {
       isSystem: false,
       permKeys: productionPermKeys,
     },
-    { key: "FINANCE", label: "Қаржы маманы", isSystem: false, permKeys: [] },
+    { key: "FINANCE", label: "Қаржы маманы", isSystem: false, permKeys: financePermKeys },
     {
       key: "WAREHOUSE",
       label: "Склад менеджері",
@@ -266,14 +268,14 @@ async function main() {
 
   const userDefs = [
     { email: "admin@avtostyle.kz", name: "Әкімші", roleKey: "ADMIN" },
-    { email: "rop@avtostyle.kz", name: "Айгүл Сатбаева (РОП)", roleKey: "ROP" },
-    { email: "sales1@avtostyle.kz", name: "Сату маманы 1", roleKey: "SALES" },
-    { email: "sales2@avtostyle.kz", name: "Сату маманы 2", roleKey: "SALES" },
-    { email: "sales3@avtostyle.kz", name: "Сату маманы 3", roleKey: "SALES" },
-    { email: "sales4@avtostyle.kz", name: "Сату маманы 4", roleKey: "SALES" },
-    { email: "sales5@avtostyle.kz", name: "Сату маманы 5", roleKey: "SALES" },
-    { email: "sales6@avtostyle.kz", name: "Сату маманы 6", roleKey: "SALES" },
-    { email: "sales7@avtostyle.kz", name: "Сату маманы 7", roleKey: "SALES" },
+    { email: "rop@avtostyle.kz", name: "Айгүл Сатбаева (РОП)", roleKey: "ROP", commissionRate: 3 },
+    { email: "sales1@avtostyle.kz", name: "Сату маманы 1", roleKey: "SALES", commissionRate: 5 },
+    { email: "sales2@avtostyle.kz", name: "Сату маманы 2", roleKey: "SALES", commissionRate: 5 },
+    { email: "sales3@avtostyle.kz", name: "Сату маманы 3", roleKey: "SALES", commissionRate: 5 },
+    { email: "sales4@avtostyle.kz", name: "Сату маманы 4", roleKey: "SALES", commissionRate: 5 },
+    { email: "sales5@avtostyle.kz", name: "Сату маманы 5", roleKey: "SALES", commissionRate: 5 },
+    { email: "sales6@avtostyle.kz", name: "Сату маманы 6", roleKey: "SALES", commissionRate: 5 },
+    { email: "sales7@avtostyle.kz", name: "Сату маманы 7", roleKey: "SALES", commissionRate: 5 },
     {
       email: "production@avtostyle.kz",
       name: "Өндіріс жұмысшысы",
@@ -294,14 +296,16 @@ async function main() {
 
   const userIdByEmail: Record<string, string> = {};
   for (const u of userDefs) {
+    const commissionRate = "commissionRate" in u ? u.commissionRate : undefined;
     const user = await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, roleId: roleIdByKey[u.roleKey] },
+      update: { name: u.name, roleId: roleIdByKey[u.roleKey], commissionRate },
       create: {
         email: u.email,
         name: u.name,
         passwordHash,
         roleId: roleIdByKey[u.roleKey],
+        commissionRate,
       },
     });
     userIdByEmail[u.email] = user.id;
@@ -622,6 +626,69 @@ async function main() {
       where: { title: q.title },
     });
     if (!existing) await prisma.quickReply.create({ data: q });
+  }
+
+  console.log("Backfilling finance transactions for pre-existing data...");
+  // One-time, idempotent: posts ledger entries for deals/orders that predate the
+  // Transaction model, so ОПиУ/employee/balance reports aren't empty on day one.
+  const dealsWithPrepayment = await prisma.deal.findMany({ where: { prepayment: { gt: 0 } } });
+  for (const deal of dealsWithPrepayment) {
+    const existing = await prisma.transaction.findFirst({
+      where: { dealId: deal.id, category: "sales_payment" },
+    });
+    if (existing) continue;
+    await prisma.$transaction(async (tx) => {
+      await postSalesPayment(tx, {
+        amount: Number(deal.prepayment),
+        dealId: deal.id,
+        assignedToId: deal.assignedToId,
+        createdById: adminId,
+        description: "Бастапқы төлем (backfill)",
+      });
+    });
+  }
+
+  const standaloneOrders = await prisma.productionOrder.findMany({
+    where: { dealId: null, paymentAmount: { gt: 0 } },
+  });
+  for (const order of standaloneOrders) {
+    const existing = await prisma.transaction.findFirst({
+      where: { productionOrderId: order.id, category: "sales_payment" },
+    });
+    if (existing) continue;
+    await prisma.$transaction(async (tx) => {
+      await postTransaction(tx, {
+        type: "INCOME",
+        category: "sales_payment",
+        amount: Number(order.paymentAmount),
+        productionOrderId: order.id,
+        description: "Өндіріс заявкасы бойынша төлем (backfill)",
+        createdById: adminId,
+      });
+    });
+  }
+
+  const purchaseOrdersWithReceipts = await prisma.purchaseOrder.findMany({
+    where: { items: { some: { receivedQty: { gt: 0 } } } },
+    include: { items: true },
+  });
+  for (const po of purchaseOrdersWithReceipts) {
+    const existing = await prisma.transaction.findFirst({
+      where: { purchaseOrderId: po.id, category: "material_purchase" },
+    });
+    if (existing) continue;
+    const total = po.items.reduce((s, it) => s + Number(it.receivedQty) * Number(it.price), 0);
+    if (total <= 0) continue;
+    await prisma.$transaction(async (tx) => {
+      await postTransaction(tx, {
+        type: "EXPENSE",
+        category: "material_purchase",
+        amount: total,
+        purchaseOrderId: po.id,
+        description: `Заказ №${po.number} қабылдау (backfill)`,
+        createdById: po.createdById,
+      });
+    });
   }
 
   console.log(

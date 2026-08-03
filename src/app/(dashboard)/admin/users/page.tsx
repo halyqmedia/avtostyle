@@ -46,6 +46,7 @@ export default async function AdminUsersPage() {
                     userId={u.id}
                     roleId={u.roleId}
                     isActive={u.isActive}
+                    commissionRate={u.commissionRate ? Number(u.commissionRate) : null}
                     roles={roles.map((r) => ({ id: r.id, label: r.label }))}
                   />
                 </TableCell>

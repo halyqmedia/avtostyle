@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
 import { applyStockMovement } from "@/lib/stock";
+import { postTransaction } from "@/lib/transactions";
 
 function optionalText(formData: FormData, key: string): string | null {
   const value = formData.get(key);
@@ -59,7 +60,7 @@ export async function receivePurchaseOrder(orderId: string, formData: FormData) 
   if (!order) throw new Error("Заказ табылмады");
   if (order.status === "RECEIVED" || order.status === "CANCELLED") return;
 
-  const updates: { itemId: string; productId: string; delta: number; newReceivedQty: number }[] = [];
+  const updates: { itemId: string; productId: string; delta: number; newReceivedQty: number; price: number }[] = [];
   for (const item of order.items) {
     const raw = formData.get(`received_${item.id}`);
     if (raw === null) continue;
@@ -69,7 +70,7 @@ export async function receivePurchaseOrder(orderId: string, formData: FormData) 
     const cappedQty = Math.min(newReceivedQty, currentQty);
     const delta = cappedQty - Number(item.receivedQty);
     if (delta === 0) continue;
-    updates.push({ itemId: item.id, productId: item.productId, delta, newReceivedQty: cappedQty });
+    updates.push({ itemId: item.id, productId: item.productId, delta, newReceivedQty: cappedQty, price: Number(item.price) });
   }
   if (updates.length === 0) return;
 
@@ -89,6 +90,16 @@ export async function receivePurchaseOrder(orderId: string, formData: FormData) 
           refId: order.id,
           createdById: session.user.id,
         });
+        if (u.delta > 0) {
+          await postTransaction(tx, {
+            type: "EXPENSE",
+            category: "material_purchase",
+            amount: u.delta * u.price,
+            purchaseOrderId: order.id,
+            description: `Заказ №${order.number} қабылдау`,
+            createdById: session.user.id,
+          });
+        }
       }
 
       const freshItems = await tx.purchaseOrderItem.findMany({ where: { orderId: order.id } });

@@ -12,6 +12,7 @@ export const PERMISSIONS = {
   PRODUCTION_ORDER_CREATE: "production.order.create",
   PRODUCTION_ACCESS: "production.access",
   FINANCE_ACCESS: "finance.access",
+  FINANCE_MANAGE: "finance.manage",
   WAREHOUSE_ACCESS: "warehouse.access",
   WAREHOUSE_MANAGE: "warehouse.manage",
 } as const;
@@ -36,6 +37,11 @@ export const PERMISSION_DEFINITIONS: {
   { key: PERMISSIONS.PRODUCTION_ORDER_CREATE, label: "Өндіріске заявка құру", module: "sales" },
   { key: PERMISSIONS.PRODUCTION_ACCESS, label: "Өндіріс модуліне кіру (конвейр)", module: "production" },
   { key: PERMISSIONS.FINANCE_ACCESS, label: "Қаржы модуліне кіру", module: "finance" },
+  {
+    key: PERMISSIONS.FINANCE_MANAGE,
+    label: "Қаржыны басқару (шығын/кіріс қосу, комиссия пайызын баптау)",
+    module: "finance",
+  },
   { key: PERMISSIONS.WAREHOUSE_ACCESS, label: "Склад модуліне кіру", module: "warehouse" },
   {
     key: PERMISSIONS.WAREHOUSE_MANAGE,
