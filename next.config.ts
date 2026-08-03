@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "16mb",
     },
   },
+  // Uses runtime-computed require() to pick its platform binary — Next's bundler can't
+  // statically analyze that, so it needs Node's own require instead of being bundled.
+  serverExternalPackages: ["@ffmpeg-installer/ffmpeg"],
 };
 
 export default nextConfig;

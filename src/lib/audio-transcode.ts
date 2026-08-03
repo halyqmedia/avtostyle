@@ -1,6 +1,6 @@
 import "server-only";
 import { spawn } from "node:child_process";
-import ffmpegPath from "ffmpeg-static";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 
 /**
  * Browsers record voice notes as Opus-in-WebM, which Meta's media upload
@@ -10,11 +10,8 @@ import ffmpegPath from "ffmpeg-static";
  * no re-encode, no quality loss), it doesn't transcode audio.
  */
 export async function remuxWebmOpusToOgg(input: Buffer): Promise<Buffer> {
-  const binPath: string | null = ffmpegPath;
-  if (!binPath) throw new Error("ffmpeg табылмады (осы платформаға арналған бинарник жоқ)");
-
   return new Promise((resolve, reject) => {
-    const proc = spawn(binPath, ["-i", "pipe:0", "-c:a", "copy", "-f", "ogg", "pipe:1"]);
+    const proc = spawn(ffmpegInstaller.path, ["-i", "pipe:0", "-c:a", "copy", "-f", "ogg", "pipe:1"]);
 
     const chunks: Buffer[] = [];
     let stderr = "";
