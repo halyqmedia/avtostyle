@@ -42,6 +42,8 @@ export async function createStage(_prevState: FormState, formData: FormData): Pr
   });
 
   revalidatePath("/admin/pipeline-stages");
+  revalidatePath("/crm");
+  revalidatePath("/production");
 }
 
 export async function updateStageColor(stageId: string, color: string) {
@@ -49,6 +51,7 @@ export async function updateStageColor(stageId: string, color: string) {
   await prisma.pipelineStage.update({ where: { id: stageId }, data: { color } });
   revalidatePath("/admin/pipeline-stages");
   revalidatePath("/crm");
+  revalidatePath("/production");
 }
 
 export async function updateStageName(stageId: string, name: string) {
@@ -56,6 +59,7 @@ export async function updateStageName(stageId: string, name: string) {
   await prisma.pipelineStage.update({ where: { id: stageId }, data: { name } });
   revalidatePath("/admin/pipeline-stages");
   revalidatePath("/crm");
+  revalidatePath("/production");
 }
 
 export async function reorderStage(pipeline: string, stageId: string, direction: "up" | "down") {
@@ -80,4 +84,5 @@ export async function reorderStage(pipeline: string, stageId: string, direction:
 
   revalidatePath("/admin/pipeline-stages");
   revalidatePath("/crm");
+  revalidatePath("/production");
 }
