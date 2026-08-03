@@ -15,6 +15,16 @@ const SALES_STAGES = [
   { key: "LOST", name: "Бас тартылды", color: "#EF4444", order: 5, isDefault: false, isFinal: true },
 ];
 
+const PRODUCTION_STAGES = [
+  { key: "NEW_ORDER", name: "Жаңа тапсырыс", color: "#3B82F6", order: 0, isDefault: true, isFinal: false },
+  { key: "PATTERN_CUT", name: "Лекало кесу", color: "#F59E0B", order: 1, isDefault: false, isFinal: false },
+  { key: "SEWING", name: "Тігу бөлімі", color: "#8B5CF6", order: 2, isDefault: false, isFinal: false },
+  { key: "INSPECTION", name: "Тексеру", color: "#EC4899", order: 3, isDefault: false, isFinal: false },
+  { key: "PACKAGING", name: "Упаковка", color: "#06B6D4", order: 4, isDefault: false, isFinal: false },
+  { key: "LOGISTICS", name: "Логистика", color: "#F97316", order: 5, isDefault: false, isFinal: false },
+  { key: "DELIVERED", name: "Жеткізілді", color: "#22C55E", order: 6, isDefault: false, isFinal: true },
+];
+
 async function main() {
   console.log("Seeding permissions...");
   for (const p of PERMISSION_DEFINITIONS) {
@@ -31,22 +41,25 @@ async function main() {
     PERMISSIONS.DEALS_VIEW_OWN,
     PERMISSIONS.DEALS_CREATE,
     PERMISSIONS.DEALS_MOVE,
+    PERMISSIONS.PRODUCTION_ORDER_CREATE,
   ];
   const ropPermKeys = [
     PERMISSIONS.DEALS_VIEW_ALL,
     PERMISSIONS.DEALS_ASSIGN,
     PERMISSIONS.DEALS_CREATE,
     PERMISSIONS.DEALS_MOVE,
+    PERMISSIONS.PRODUCTION_ORDER_CREATE,
     PERMISSIONS.ADMIN_PIPELINE_MANAGE,
     PERMISSIONS.ADMIN_QUICK_REPLIES_MANAGE,
   ];
+  const productionPermKeys = [PERMISSIONS.PRODUCTION_ACCESS];
 
   const roleDefs: { key: string; label: string; isSystem: boolean; permKeys: string[] }[] = [
     { key: "ADMIN", label: "Әкімші", isSystem: true, permKeys: allPermKeys },
     { key: "ROP", label: "Сату бөлімінің басшысы", isSystem: true, permKeys: ropPermKeys },
     { key: "SALES", label: "Сату маманы", isSystem: true, permKeys: salesPermKeys },
-    { key: "PRODUCTION_WORKER", label: "Өндіріс жұмысшысы", isSystem: false, permKeys: [] },
-    { key: "PRODUCTION_HEAD", label: "Өндіріс басшысы", isSystem: false, permKeys: [] },
+    { key: "PRODUCTION_WORKER", label: "Өндіріс жұмысшысы", isSystem: false, permKeys: productionPermKeys },
+    { key: "PRODUCTION_HEAD", label: "Өндіріс басшысы", isSystem: false, permKeys: productionPermKeys },
     { key: "FINANCE", label: "Қаржы маманы", isSystem: false, permKeys: [] },
     { key: "WAREHOUSE", label: "Склад менеджері", isSystem: false, permKeys: [] },
   ];
@@ -88,6 +101,24 @@ async function main() {
       },
     });
     stageIdByKey[s.key] = stage.id;
+  }
+
+  const productionStageIdByKey: Record<string, string> = {};
+  for (const s of PRODUCTION_STAGES) {
+    const stage = await prisma.pipelineStage.upsert({
+      where: { pipeline_key: { pipeline: "PRODUCTION", key: s.key } },
+      update: { name: s.name, color: s.color, order: s.order, isDefault: s.isDefault, isFinal: s.isFinal },
+      create: {
+        pipeline: "PRODUCTION",
+        key: s.key,
+        name: s.name,
+        color: s.color,
+        order: s.order,
+        isDefault: s.isDefault,
+        isFinal: s.isFinal,
+      },
+    });
+    productionStageIdByKey[s.key] = stage.id;
   }
 
   console.log("Seeding users...");
@@ -177,6 +208,67 @@ async function main() {
         assignedToId: userIdByEmail[d.assignee],
         createdById: adminId,
         source: "manual",
+      },
+    });
+  }
+
+  console.log("Seeding demo production orders...");
+  const sportageDeal = await prisma.deal.findFirst({ where: { title: "Sportage ковриктер жинағы" } });
+  const productionOrderSeeds = [
+    {
+      dealId: sportageDeal?.id,
+      clientName: "Динара Ахметова",
+      clientPhone: "+7 702 222 3344",
+      city: "Алматы",
+      address: "Әл-Фараби даңғылы, 15",
+      carBrand: "Kia",
+      carYear: "2022",
+      carGeneration: "4-ұрпақ (QL)",
+      paymentAmount: 55000,
+      paymentType: "card",
+      remainingAmount: 0,
+      note: "Демо тапсырыс — seed деректері",
+      stage: "SEWING",
+      items: [{ productType: "EVA Premium ковриктер жинағы (кроссовер)" }],
+    },
+    {
+      dealId: null,
+      clientName: "Ерлан Жақсыбеков",
+      clientPhone: "+7 701 111 2233",
+      city: "Астана",
+      address: null,
+      carBrand: "Toyota",
+      carYear: "2021",
+      carGeneration: null,
+      paymentAmount: 45000,
+      paymentType: "cash",
+      remainingAmount: 0,
+      note: null,
+      stage: "NEW_ORDER",
+      items: [{ productType: "EVA Premium ковриктер жинағы (седан)" }],
+    },
+  ];
+
+  for (const o of productionOrderSeeds) {
+    const existing = await prisma.productionOrder.findFirst({ where: { clientName: o.clientName, note: o.note } });
+    if (existing) continue;
+    await prisma.productionOrder.create({
+      data: {
+        dealId: o.dealId ?? null,
+        clientName: o.clientName,
+        clientPhone: o.clientPhone,
+        city: o.city,
+        address: o.address,
+        carBrand: o.carBrand,
+        carYear: o.carYear,
+        carGeneration: o.carGeneration,
+        paymentAmount: o.paymentAmount,
+        paymentType: o.paymentType,
+        remainingAmount: o.remainingAmount,
+        note: o.note,
+        pipelineStageId: productionStageIdByKey[o.stage],
+        createdById: adminId,
+        items: { create: o.items },
       },
     });
   }

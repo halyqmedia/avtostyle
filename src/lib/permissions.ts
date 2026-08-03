@@ -9,6 +9,7 @@ export const PERMISSIONS = {
   DEALS_CREATE: "deals.create",
   DEALS_ASSIGN: "deals.assign",
   DEALS_MOVE: "deals.move",
+  PRODUCTION_ORDER_CREATE: "production.order.create",
   PRODUCTION_ACCESS: "production.access",
   FINANCE_ACCESS: "finance.access",
   WAREHOUSE_ACCESS: "warehouse.access",
@@ -31,7 +32,8 @@ export const PERMISSION_DEFINITIONS: {
   { key: PERMISSIONS.DEALS_CREATE, label: "Сделка құру", module: "sales" },
   { key: PERMISSIONS.DEALS_ASSIGN, label: "Сделканы маманға бөлу", module: "sales" },
   { key: PERMISSIONS.DEALS_MOVE, label: "Сделканы этаптар арасында жылжыту", module: "sales" },
-  { key: PERMISSIONS.PRODUCTION_ACCESS, label: "Өндіріс модуліне кіру", module: "production" },
+  { key: PERMISSIONS.PRODUCTION_ORDER_CREATE, label: "Өндіріске заявка құру", module: "sales" },
+  { key: PERMISSIONS.PRODUCTION_ACCESS, label: "Өндіріс модуліне кіру (конвейр)", module: "production" },
   { key: PERMISSIONS.FINANCE_ACCESS, label: "Қаржы модуліне кіру", module: "finance" },
   { key: PERMISSIONS.WAREHOUSE_ACCESS, label: "Склад модуліне кіру", module: "warehouse" },
 ];

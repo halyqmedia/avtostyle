@@ -11,6 +11,7 @@ import { WhatsAppChat } from "@/components/crm/whatsapp-chat";
 import { DealNotes } from "@/components/crm/deal-notes";
 import { DealInfoCard } from "@/components/crm/deal-info-card";
 import { getMediaUrl } from "@/lib/media-storage";
+import { CreateProductionOrderDialog } from "@/components/crm/create-production-order-dialog";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
@@ -27,29 +28,36 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
 
   const canMove = hasPermission(session.user.permissions, PERMISSIONS.DEALS_MOVE);
   const canAssign = hasPermission(session.user.permissions, PERMISSIONS.DEALS_ASSIGN);
+  const canCreateProductionOrder = hasPermission(session.user.permissions, PERMISSIONS.PRODUCTION_ORDER_CREATE);
   const isAdmin = session.user.roleKey === "ADMIN";
 
-  const [history, stages, notes, products, salesUsers, whatsappMessages, quickReplies] = await Promise.all([
-    prisma.stageHistory.findMany({
-      where: { entityType: "DEAL", entityId: deal.id },
-      include: { fromStage: true, toStage: true, movedBy: true },
-      orderBy: { movedAt: "desc" },
-    }),
-    prisma.pipelineStage.findMany({ where: { pipeline: "SALES" }, orderBy: { order: "asc" } }),
-    prisma.dealNote.findMany({
-      where: { dealId: deal.id },
-      include: { author: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    prisma.user.findMany({ where: { role: { key: "SALES" }, isActive: true }, orderBy: { name: "asc" } }),
-    prisma.whatsAppMessage.findMany({
-      where: { dealId: deal.id },
-      include: { sentBy: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.quickReply.findMany({ orderBy: { createdAt: "asc" } }),
-  ]);
+  const [history, stages, notes, products, salesUsers, whatsappMessages, quickReplies, productionOrders] =
+    await Promise.all([
+      prisma.stageHistory.findMany({
+        where: { entityType: "DEAL", entityId: deal.id },
+        include: { fromStage: true, toStage: true, movedBy: true },
+        orderBy: { movedAt: "desc" },
+      }),
+      prisma.pipelineStage.findMany({ where: { pipeline: "SALES" }, orderBy: { order: "asc" } }),
+      prisma.dealNote.findMany({
+        where: { dealId: deal.id },
+        include: { author: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+      prisma.user.findMany({ where: { role: { key: "SALES" }, isActive: true }, orderBy: { name: "asc" } }),
+      prisma.whatsAppMessage.findMany({
+        where: { dealId: deal.id },
+        include: { sentBy: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.quickReply.findMany({ orderBy: { createdAt: "asc" } }),
+      prisma.productionOrder.findMany({
+        where: { dealId: deal.id },
+        include: { pipelineStage: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
 
   const chatMessages =
     whatsappMessages.length > 0
@@ -101,13 +109,38 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         </Link>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl font-semibold">{deal.title}</h1>
-          <DealStageSelect
-            dealId={deal.id}
-            currentStageId={deal.pipelineStageId}
-            stages={stages.map((s) => ({ id: s.id, name: s.name, color: s.color }))}
-            disabled={!canMove}
-          />
+          <div className="flex items-center gap-2">
+            {canCreateProductionOrder && (
+              <CreateProductionOrderDialog
+                dealId={deal.id}
+                defaultClientName={deal.client.fullName}
+                defaultClientPhone={deal.client.phone ?? undefined}
+                defaultPaymentAmount={prepayment}
+                defaultRemainingAmount={Math.max(amount - prepayment, 0)}
+              />
+            )}
+            <DealStageSelect
+              dealId={deal.id}
+              currentStageId={deal.pipelineStageId}
+              stages={stages.map((s) => ({ id: s.id, name: s.name, color: s.color }))}
+              disabled={!canMove}
+            />
+          </div>
         </div>
+        {productionOrders.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {productionOrders.map((o) => (
+              <Link
+                key={o.id}
+                href={`/production/orders/${o.id}`}
+                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs hover:bg-muted"
+              >
+                <span className="size-1.5 rounded-full" style={{ backgroundColor: o.pipelineStage.color }} />
+                Өндіріс заявкасы: {o.pipelineStage.name}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <Card>

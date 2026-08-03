@@ -11,6 +11,7 @@ export async function writeStageHistory(
     toStageId: string;
     movedById: string;
     note?: string;
+    photoUrl?: string;
   },
 ) {
   return tx.stageHistory.create({
@@ -21,6 +22,7 @@ export async function writeStageHistory(
       toStageId: args.toStageId,
       movedById: args.movedById,
       note: args.note,
+      photoUrl: args.photoUrl,
     },
   });
 }

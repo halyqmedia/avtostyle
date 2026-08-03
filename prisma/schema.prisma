@@ -24,6 +24,7 @@ model User {
   stageMoves       StageHistory[]
   dealNotes        DealNote[]
   whatsappMessages WhatsAppMessage[]
+  productionOrders ProductionOrder[] @relation("ProductionOrderCreator")
 
   @@map("users")
 }
@@ -73,9 +74,10 @@ model PipelineStage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  dealsIn   Deal[]         @relation("DealStage")
-  fromMoves StageHistory[] @relation("FromStage")
-  toMoves   StageHistory[] @relation("ToStage")
+  dealsIn            Deal[]            @relation("DealStage")
+  productionOrdersIn ProductionOrder[] @relation("ProductionOrderStage")
+  fromMoves          StageHistory[]    @relation("FromStage")
+  toMoves            StageHistory[]    @relation("ToStage")
 
   @@unique([pipeline, key])
   @@unique([pipeline, order])
@@ -134,6 +136,7 @@ model Deal {
 
   notes            DealNote[]
   whatsappMessages WhatsAppMessage[]
+  productionOrders ProductionOrder[]
 
   @@index([assignedToId])
   @@index([pipelineStageId])
@@ -191,9 +194,55 @@ model StageHistory {
   movedBy     User           @relation(fields: [movedById], references: [id])
   movedAt     DateTime       @default(now())
   note        String?
+  photoUrl    String? // optional proof-of-stage photo (bucket key) — production conveyor mainly
 
   @@index([entityType, entityId])
   @@map("stage_history")
+}
+
+/// Manufacturing order a sales manager opens for the production department once a deal is sold.
+/// Moves through PipelineStage rows where pipeline = "PRODUCTION"; every stage move is logged in
+/// StageHistory (entityType = "PRODUCTION_ORDER") for per-step worker attribution and audit.
+model ProductionOrder {
+  id              String        @id @default(cuid())
+  dealId          String?
+  deal            Deal?         @relation(fields: [dealId], references: [id])
+  clientName      String
+  clientPhone     String
+  city            String?
+  address         String?
+  carBrand        String?
+  carYear         String?
+  carGeneration   String?
+  paymentAmount   Decimal       @default(0) @db.Decimal(12, 2)
+  paymentType     String? // cash | card | transfer
+  remainingAmount Decimal       @default(0) @db.Decimal(12, 2)
+  note            String?
+  pipelineStageId String
+  pipelineStage   PipelineStage @relation("ProductionOrderStage", fields: [pipelineStageId], references: [id], onDelete: Restrict)
+  createdById     String
+  createdBy       User          @relation("ProductionOrderCreator", fields: [createdById], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  items ProductionOrderItem[]
+
+  @@index([pipelineStageId])
+  @@index([dealId])
+  @@map("production_orders")
+}
+
+/// One product line within a production order — a client can order several items in one заявка.
+model ProductionOrderItem {
+  id               String          @id @default(cuid())
+  orderId          String
+  order            ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productType      String
+  materialPhotoUrl String? // bucket key
+  createdAt        DateTime        @default(now())
+
+  @@index([orderId])
+  @@map("production_order_items")
 }
 
 /// Canned response a manager can insert into the WhatsApp draft with one click.
@@ -221,14 +270,8 @@ model InboundWebhookEvent {
 }
 
 // -----------------------------------------------------------------------
-// Phase 2/3/4 models (not implemented yet, documented here as extension
+// Phase 3/4 models (not implemented yet, documented here as extension
 // points so schema changes for later phases are additive, not disruptive):
-//
-// Phase 2 - Production conveyor:
-//   model ProductionOrder { ... created from a won Deal, moves through
-//     PipelineStage rows where pipeline = "PRODUCTION", uses the same
-//     StageHistory table (entityType = "PRODUCTION_ORDER") for per-stage
-//     worker attribution and audit/analytics. }
 //
 // Phase 3 - Finance:
 //   model Transaction { ... income/expense ledger entries, linked to Deal
