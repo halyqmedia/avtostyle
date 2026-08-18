@@ -90,7 +90,11 @@ export async function startSession(sessionId: string, userId: string): Promise<v
   });
 
   sock.ev.on("messages.upsert", ({ messages, type }) => {
-    console.log(`[baileys ${sessionId}] messages.upsert type=${type} count=${messages.length}`);
+    for (const m of messages) {
+      console.log(
+        `[baileys ${sessionId}] upsert type=${type} jid=${m.key.remoteJid} fromMe=${m.key.fromMe} stub=${m.messageStubType ?? "-"} keys=${m.message ? Object.keys(m.message).join(",") : "none"}`,
+      );
+    }
     if (type !== "notify") return; // skip bulk history backfill, only handle live traffic
     for (const msg of messages) {
       handleBaileysMessage(sessionId, userId, msg).catch((err) => console.error("Baileys inbound handling failed:", err));
