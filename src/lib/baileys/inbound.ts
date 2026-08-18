@@ -30,6 +30,12 @@ export async function handleBaileysMessage(sessionId: string, ownerUserId: strin
   const digits = jidToDigits(jid);
   const phone = normalizePhone(digits) ?? `+${digits}`;
 
+  // Right after linking, Baileys replays a burst of the phone's own recent activity as
+  // `fromMe` "notify" events — including bare read-receipt/sync stubs with no real content.
+  // A message to/from the connected number's own JID is never a client conversation either way.
+  const ownSession = await prisma.whatsAppSession.findUnique({ where: { id: sessionId }, select: { phoneNumber: true } });
+  if (ownSession?.phoneNumber && ownSession.phoneNumber.replace(/\D/g, "") === digits) return;
+
   const content = msg.message;
   const text =
     content.conversation ??
@@ -45,6 +51,7 @@ export async function handleBaileysMessage(sessionId: string, ownerUserId: strin
   let fileName: string | undefined;
 
   const mediaMsg = content.imageMessage || content.videoMessage || content.audioMessage || content.documentMessage;
+  if (!text && !mediaMsg) return; // sync stub / receipt-only event — nothing worth showing in the CRM
   if (mediaMsg) {
     messageType = content.imageMessage
       ? "image"
