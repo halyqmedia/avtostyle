@@ -22,6 +22,14 @@ import { MonthlyBarChart } from "@/components/admin/monthly-bar-chart";
 import { InlineEditText } from "@/components/crm/inline-edit-text";
 import { updateUserName, updateUserPhone } from "@/actions/users";
 
+const WHATSAPP_STATUS_LABEL: Record<string, string> = {
+  NOT_CONNECTED: "Қосылмаған",
+  PENDING: "QR күтілуде",
+  CONNECTED: "Қосылған",
+  DISCONNECTED: "Қайта қосылуда",
+  LOGGED_OUT: "Шықты",
+};
+
 function formatMoney(n: number) {
   return new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₸";
 }
@@ -32,7 +40,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
 
   const user = await prisma.user.findUnique({
     where: { id },
-    include: { role: { include: { permissions: { include: { permission: true } } } } },
+    include: { role: { include: { permissions: { include: { permission: true } } } }, whatsappSession: true },
   });
   if (!user) notFound();
 
@@ -133,6 +141,25 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
             <p className="mb-1 text-xs text-muted-foreground">Фото</p>
             <EmployeePhotoForm userId={user.id} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">WhatsApp қосылымы</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center gap-2 text-sm">
+          <Badge variant={user.whatsappSession?.status === "CONNECTED" ? "default" : "secondary"}>
+            {WHATSAPP_STATUS_LABEL[user.whatsappSession?.status ?? "NOT_CONNECTED"]}
+          </Badge>
+          {user.whatsappSession?.phoneNumber && (
+            <span className="text-muted-foreground">{user.whatsappSession.phoneNumber}</span>
+          )}
+          {!user.whatsappSession && (
+            <span className="text-xs text-muted-foreground">
+              Қызметкер өз WhatsApp-ын «Менің WhatsApp-ым» бетінен өзі қосады.
+            </span>
+          )}
         </CardContent>
       </Card>
 

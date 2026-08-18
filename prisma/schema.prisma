@@ -32,6 +32,7 @@ model User {
   transactionsAbout  Transaction[]     @relation("TransactionUser")
   transactionsLogged Transaction[]     @relation("TransactionCreator")
   aiSettingsUpdates  AiSettings[]
+  whatsappSession    WhatsAppSession?
 
   @@map("users")
 }
@@ -336,11 +337,49 @@ model WhatsAppMessage {
   aiGenerated       Boolean  @default(false)
   promptTokens      Int? // Gemini usageMetadata, only set on aiGenerated messages — for cost tracking
   completionTokens  Int?
+  channel           String           @default("CLOUD_API") // CLOUD_API (shared Meta bot number) | PERSONAL (a manager's own Baileys-linked WhatsApp)
+  sessionId         String?
+  session           WhatsAppSession? @relation(fields: [sessionId], references: [id])
   createdAt         DateTime @default(now())
 
   @@index([dealId])
   @@index([whatsappMessageId])
   @@map("whatsapp_messages")
+}
+
+/// A manager's own WhatsApp account, linked via the WhatsApp Web protocol (QR scan, Baileys) —
+/// one per User. Kept alongside the shared Cloud API bot number so a manager can message clients
+/// straight from their personal/business number while every message still lands in this CRM.
+model WhatsAppSession {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id])
+  phoneNumber String? // set once connected, e.g. "+77471234567"
+  status      String    @default("PENDING") // PENDING (QR issued, not scanned yet) | CONNECTED | DISCONNECTED (will auto-retry) | LOGGED_OUT (scan a fresh QR)
+  qr          String? // data:image/png;base64 QR code for the connect page to display — cleared once connected
+  lastError   String?
+  connectedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  authKeys WhatsAppAuthKey[]
+  messages WhatsAppMessage[]
+
+  @@map("whatsapp_sessions")
+}
+
+/// Baileys' signal-protocol auth state (creds + prekeys) for one WhatsAppSession, persisted to
+/// Postgres instead of disk so a session survives redeploys without rescanning the QR code.
+model WhatsAppAuthKey {
+  id        String          @id @default(cuid())
+  sessionId String
+  session   WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  key       String
+  value     String          @db.Text
+  updatedAt DateTime        @updatedAt
+
+  @@unique([sessionId, key])
+  @@map("whatsapp_auth_keys")
 }
 
 /// Singleton (id = "default") config for the WhatsApp AI sales agent.

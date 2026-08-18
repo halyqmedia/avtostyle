@@ -9,6 +9,7 @@ import {
   Warehouse,
   ShieldCheck,
   Inbox,
+  MessageCircle,
 } from "lucide-react";
 import { hasPermission } from "@/lib/permissions";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/production", label: "Өндіріс", icon: Factory, permission: PERMISSIONS.PRODUCTION_ACCESS },
   { href: "/finance", label: "Қаржы", icon: Wallet, permission: PERMISSIONS.FINANCE_ACCESS },
   { href: "/warehouse", label: "Склад", icon: Warehouse, permission: PERMISSIONS.WAREHOUSE_ACCESS },
+  { href: "/settings/whatsapp", label: "Менің WhatsApp-ым", icon: MessageCircle, permission: null },
   { href: "/admin", label: "Әкімшілік", icon: ShieldCheck, permission: PERMISSIONS.ADMIN_ACCESS },
 ] as const;
 
