@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { callGemini } from "@/lib/gemini";
 import { writeStageHistory } from "@/lib/stage-history";
+import { notifyManagerHotLead } from "@/lib/manager-notify";
 
 const TEMPERATURES = new Set(["HOT", "WARM", "COLD"]);
 
@@ -112,4 +113,9 @@ export async function analyzeDeal(dealId: string): Promise<void> {
       });
     }
   });
+
+  const becameHot = temperature === "HOT" && deal.aiTemperature !== "HOT";
+  if (becameHot) {
+    await notifyManagerHotLead(deal).catch((err) => console.error("Hot lead notify failed:", err));
+  }
 }

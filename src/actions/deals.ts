@@ -3,8 +3,8 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requirePermission } from "@/lib/auth-guard";
-import { PERMISSIONS } from "@/lib/permissions";
+import { requirePermission, requireSession } from "@/lib/auth-guard";
+import { PERMISSIONS, hasPermission } from "@/lib/permissions";
 import { writeStageHistory } from "@/lib/stage-history";
 import { assertDealAccess } from "@/lib/deal-access";
 import { normalizePhone } from "@/lib/phone";
@@ -168,6 +168,18 @@ export async function updateDealAmount(dealId: string, amount: number) {
   await prisma.deal.update({ where: { id: dealId }, data: { amount } });
   revalidatePath(`/crm/deals/${dealId}`);
   revalidatePath("/crm");
+}
+
+export async function getHotLeadsCount(): Promise<number> {
+  const session = await requireSession();
+  const canViewAll = hasPermission(session.user.permissions, PERMISSIONS.DEALS_VIEW_ALL);
+  return prisma.deal.count({
+    where: {
+      aiTemperature: "HOT",
+      pipelineStage: { isFinal: false },
+      ...(canViewAll ? {} : { assignedToId: session.user.id }),
+    },
+  });
 }
 
 export async function runAiAnalysis(dealId: string) {

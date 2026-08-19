@@ -15,6 +15,7 @@ import {
 import { hasPermission } from "@/lib/permissions";
 import { PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { HotLeadsBadge } from "@/components/layout/hot-leads-badge";
 import type { Session } from "next-auth";
 
 const NAV_ITEMS = [
@@ -57,6 +58,7 @@ export function Sidebar({ session }: { session: Session }) {
             >
               <Icon className={cn("size-4", active && "text-primary")} />
               {item.label}
+              {item.href === "/crm" && <HotLeadsBadge />}
             </Link>
           );
         })}
