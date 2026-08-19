@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  updateDealClientName,
-  updateDealClientPhone,
-  updateDealProduct,
-  updateDealAmount,
-  updateDealPrepayment,
-  assignDeal,
-} from "@/actions/deals";
+import { updateDealClientName, updateDealClientPhone, updateDealProduct, updateDealAmount, updateDealPrepayment } from "@/actions/deals";
 import { InlineEditText } from "@/components/crm/inline-edit-text";
 import { InlineEditSelect } from "@/components/crm/inline-edit-select";
 
@@ -15,41 +8,35 @@ function formatMoney(n: number) {
   return new Intl.NumberFormat("ru-RU").format(n) + " ₸";
 }
 
-export function DealInfoCard({
+export function DealSummary({
   dealId,
   clientName,
   clientPhone,
   productId,
   productName,
-  assignedToId,
-  assigneeName,
   amount,
   prepayment,
   createdByName,
   source,
   products,
-  salesUsers,
   canEdit,
-  canAssign,
 }: {
   dealId: string;
   clientName: string;
   clientPhone: string | null;
   productId: string | null;
   productName: string | null;
-  assignedToId: string | null;
-  assigneeName: string | null;
   amount: number;
   prepayment: number;
   createdByName: string;
   source: string | null;
   products: { id: string; name: string }[];
-  salesUsers: { id: string; name: string }[];
   canEdit: boolean;
-  canAssign: boolean;
 }) {
+  const remainder = amount - prepayment;
+
   return (
-    <div className="grid grid-cols-2 gap-3 text-sm">
+    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
       <InlineEditText
         label="Клиент"
         value={clientName}
@@ -72,21 +59,16 @@ export function DealInfoCard({
         disabled={!canEdit}
         onSave={(v) => updateDealProduct(dealId, v)}
       />
-      <InlineEditSelect
-        label="Жауапты маман"
-        value={assignedToId}
-        displayValue={assigneeName ?? "Бөлінбеген"}
-        options={salesUsers.map((u) => ({ value: u.id, label: u.name }))}
-        allowEmpty
-        emptyLabel="Бөлінбеген"
-        disabled={!canAssign}
-        onSave={(v) => assignDeal(dealId, v)}
-      />
+      <div>
+        <p className="text-muted-foreground">Қайнар көзі</p>
+        <p className="font-medium">{source ?? "—"}</p>
+      </div>
+
       <InlineEditText
         label="Сома"
         type="number"
         value={String(amount)}
-        displayValue={formatMoney(amount)}
+        displayValue={<span className="text-base font-semibold">{formatMoney(amount)}</span>}
         disabled={!canEdit}
         onSave={(v) => updateDealAmount(dealId, Number(v))}
       />
@@ -100,15 +82,11 @@ export function DealInfoCard({
       />
       <div>
         <p className="text-muted-foreground">Қалдық</p>
-        <p className="font-medium">{formatMoney(amount - prepayment)}</p>
+        <p className="text-base font-semibold">{formatMoney(remainder)}</p>
       </div>
       <div>
         <p className="text-muted-foreground">Құрған</p>
         <p className="font-medium">{createdByName}</p>
-      </div>
-      <div>
-        <p className="text-muted-foreground">Қайнар көзі</p>
-        <p className="font-medium">{source ?? "—"}</p>
       </div>
     </div>
   );

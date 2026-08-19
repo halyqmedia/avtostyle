@@ -9,6 +9,7 @@ const TEMPERATURES = new Set(["HOT", "WARM", "COLD"]);
 type RawAnalysis = {
   temperature?: string;
   summary?: string;
+  signals?: string[];
   nextAction?: string;
   stageKey?: string;
 };
@@ -61,9 +62,10 @@ export async function analyzeDeal(dealId: string): Promise<void> {
     transcript,
     "",
     "Тек мына өрістері бар JSON объект қайтар, басқа мәтін жазба:",
-    '{"temperature": "HOT" | "WARM" | "COLD", "summary": "қазақша, 2-3 сөйлем", "nextAction": "менеджерге нақты кеңес, қазақша, 1-2 сөйлем", "stageKey": "жоғарыдағы тізімнен key"}',
+    '{"temperature": "HOT" | "WARM" | "COLD", "summary": "қазақша, 2-3 сөйлем", "signals": ["хат-хабардан алынған қысқа, нақты факт", "..."], "nextAction": "менеджерге нақты кеңес, қазақша, 1-2 сөйлем", "stageKey": "жоғарыдағы тізімнен key"}',
     "",
     'temperature: HOT — сатып алуға дайын/бағаны талқылап жатыр, WARM — қызығушылық бар бірақ шешім жоқ, COLD — қызықпаған/жауап бермей жатыр.',
+    "signals: 2-4 қысқа факт (әрқайсысы 4-6 сөзден аспасын), тек хат-хабарда нақты айтылған нәрселер, болжам емес.",
   ].join("\n");
 
   let parsed: RawAnalysis;
@@ -85,6 +87,9 @@ export async function analyzeDeal(dealId: string): Promise<void> {
   const temperature = TEMPERATURES.has(parsed.temperature ?? "") ? parsed.temperature! : null;
   const summary = parsed.summary?.trim() || null;
   const nextAction = parsed.nextAction?.trim() || null;
+  const signals = Array.isArray(parsed.signals)
+    ? parsed.signals.map((s) => String(s).trim()).filter(Boolean).slice(0, 6)
+    : [];
   if (!temperature && !summary && !nextAction) return;
 
   const targetStage = stages.find((s) => s.key === parsed.stageKey);
@@ -99,6 +104,7 @@ export async function analyzeDeal(dealId: string): Promise<void> {
       data: {
         aiTemperature: temperature,
         aiSummary: summary,
+        aiSignals: signals,
         aiNextAction: nextAction,
         aiAnalyzedAt: new Date(),
         // Restarts the 2-hour escalation clock on a fresh HOT read; clears it once the lead

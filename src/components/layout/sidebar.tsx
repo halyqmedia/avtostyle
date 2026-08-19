@@ -52,12 +52,12 @@ export function Sidebar({ session }: { session: Session }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-2.5 rounded-md border-l-2 border-transparent px-2.5 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                active && "border-primary bg-sidebar-accent text-sidebar-foreground",
+                "flex items-center gap-2.5 rounded-md border-l-2 border-transparent px-2.5 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                active && "border-primary bg-primary/10 text-sidebar-foreground",
               )}
             >
               <Icon className={cn("size-4", active && "text-primary")} />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
               {item.href === "/crm" && <HotLeadsBadge />}
             </Link>
           );

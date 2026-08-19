@@ -1,19 +1,17 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { PERMISSIONS, hasPermission } from "@/lib/permissions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
-import { DealStageSelect } from "@/components/crm/deal-stage-select";
 import { WhatsAppChat } from "@/components/crm/whatsapp-chat";
 import { DealNotes } from "@/components/crm/deal-notes";
-import { DealInfoCard } from "@/components/crm/deal-info-card";
+import { DealSummary } from "@/components/crm/deal-summary";
+import { ClientHeader } from "@/components/crm/client-header";
+import { AIInsights } from "@/components/crm/ai-insights";
 import { getMediaUrl } from "@/lib/media-storage";
 import { CreateProductionOrderDialog } from "@/components/crm/create-production-order-dialog";
 import { DealAiToggle } from "@/components/crm/deal-ai-toggle";
-import { DealAiPanel } from "@/components/crm/deal-ai-panel";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
@@ -100,88 +98,79 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
 
   const amount = Number(deal.amount);
   const prepayment = Number(deal.prepayment);
+  const channel = whatsappMessages[whatsappMessages.length - 1]?.channel ?? "CLOUD_API";
+  const channelLabel = channel === "PERSONAL" ? "Жеке WhatsApp арқылы" : "WABA (ортақ нөмір)";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,48rem)_320px] lg:items-start">
-      <div className="flex flex-col gap-4">
-      <div>
-        <Link
-          href="/crm"
-          className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Артқа
-        </Link>
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">{deal.title}</h1>
-          <div className="flex items-center gap-2">
-            {canCreateProductionOrder && (
-              <CreateProductionOrderDialog
-                dealId={deal.id}
-                defaultClientName={deal.client.fullName}
-                defaultClientPhone={deal.client.phone ?? undefined}
-                defaultPaymentAmount={prepayment}
-                defaultRemainingAmount={Math.max(amount - prepayment, 0)}
-                materials={products
-                  .filter((p) => p.category === "material")
-                  .map((p) => ({ id: p.id, name: p.name, unit: p.unit }))}
-              />
-            )}
-            <DealStageSelect
-              dealId={deal.id}
-              currentStageId={deal.pipelineStageId}
-              stages={stages.map((s) => ({ id: s.id, name: s.name, color: s.color }))}
-              disabled={!canMove}
-            />
-          </div>
+    <div className="flex flex-col gap-4">
+      <ClientHeader
+        dealId={deal.id}
+        dealTitle={deal.title}
+        clientPhone={deal.client.phone}
+        clientName={deal.client.fullName}
+        source={deal.source}
+        currentStageId={deal.pipelineStageId}
+        stages={stages.map((s) => ({ id: s.id, name: s.name, color: s.color }))}
+        assignedToId={deal.assignedToId}
+        salesUsers={salesUsers.map((u) => ({ id: u.id, name: u.name }))}
+        canMove={canMove}
+        canAssign={canAssign}
+      />
+
+      {productionOrders.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {productionOrders.map((o) => (
+            <Link
+              key={o.id}
+              href={`/production/orders/${o.id}`}
+              className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs hover:bg-muted"
+            >
+              <span className="size-1.5 rounded-full" style={{ backgroundColor: o.pipelineStage.color }} />
+              Өндіріс заявкасы: {o.pipelineStage.name}
+            </Link>
+          ))}
         </div>
-        {productionOrders.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {productionOrders.map((o) => (
-              <Link
-                key={o.id}
-                href={`/production/orders/${o.id}`}
-                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs hover:bg-muted"
-              >
-                <span className="size-1.5 rounded-full" style={{ backgroundColor: o.pipelineStage.color }} />
-                Өндіріс заявкасы: {o.pipelineStage.name}
-              </Link>
-            ))}
-          </div>
-        )}
+      )}
+
+      <div className="rounded-xl border bg-background p-4">
+        <DealSummary
+          dealId={deal.id}
+          clientName={deal.client.fullName}
+          clientPhone={deal.client.phone}
+          productId={deal.productId}
+          productName={deal.product?.name ?? null}
+          amount={amount}
+          prepayment={prepayment}
+          createdByName={deal.createdBy.name}
+          source={deal.source}
+          products={products.map((p) => ({ id: p.id, name: p.name }))}
+          canEdit={canMove}
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Сделка ақпараты</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DealInfoCard
-            dealId={deal.id}
-            clientName={deal.client.fullName}
-            clientPhone={deal.client.phone}
-            productId={deal.productId}
-            productName={deal.product?.name ?? null}
-            assignedToId={deal.assignedToId}
-            assigneeName={deal.assignedTo?.name ?? null}
-            amount={amount}
-            prepayment={prepayment}
-            createdByName={deal.createdBy.name}
-            source={deal.source}
-            products={products.map((p) => ({ id: p.id, name: p.name }))}
-            salesUsers={salesUsers.map((u) => ({ id: u.id, name: u.name }))}
-            canEdit={canMove}
-            canAssign={canAssign}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">WhatsApp</CardTitle>
-          {canMove && <DealAiToggle dealId={deal.id} aiEnabled={deal.aiEnabled} />}
-        </CardHeader>
-        <CardContent>
+      <div className="grid h-[calc(100dvh-390px)] min-h-[460px] gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-h-0 flex-col rounded-xl border">
+          <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
+            <div>
+              <p className="text-sm font-semibold">WhatsApp</p>
+              <p className="text-xs text-muted-foreground">{channelLabel}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {canCreateProductionOrder && (
+                <CreateProductionOrderDialog
+                  dealId={deal.id}
+                  defaultClientName={deal.client.fullName}
+                  defaultClientPhone={deal.client.phone ?? undefined}
+                  defaultPaymentAmount={prepayment}
+                  defaultRemainingAmount={Math.max(amount - prepayment, 0)}
+                  materials={products
+                    .filter((p) => p.category === "material")
+                    .map((p) => ({ id: p.id, name: p.name, unit: p.unit }))}
+                />
+              )}
+              {canMove && <DealAiToggle dealId={deal.id} aiEnabled={deal.aiEnabled} />}
+            </div>
+          </div>
           <WhatsAppChat
             dealId={deal.id}
             clientName={deal.client.fullName}
@@ -190,74 +179,65 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
             canSend={canMove && Boolean(deal.client.whatsappId || deal.client.phone)}
             quickReplies={quickReplies.map((q) => ({ id: q.id, title: q.title, body: q.body }))}
           />
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Ескертпелер</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DealNotes
+        <div className="min-h-0 overflow-y-auto">
+          <AIInsights
             dealId={deal.id}
-            currentUserId={session.user.id}
-            canEditAll={isAdmin}
-            notes={notes.map((n) => ({
-              id: n.id,
-              body: n.body,
-              authorId: n.authorId,
-              authorName: n.author.name,
-              createdAt: n.createdAt.toISOString(),
-              updatedAt: n.updatedAt.toISOString(),
-            }))}
+            clientPhone={deal.client.phone}
+            temperature={deal.aiTemperature}
+            summary={deal.aiSummary}
+            signals={deal.aiSignals}
+            nextAction={deal.aiNextAction}
+            analyzedAt={deal.aiAnalyzedAt?.toISOString() ?? null}
           />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Кезеңдер тарихы (аудит логы)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Әзірге өзгеріс болған жоқ.</p>
-          ) : (
-            <ol className="flex flex-col gap-3">
-              {history.map((h) => (
-                <li key={h.id} className="flex items-start gap-3 text-sm">
-                  <div className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
-                  <div>
-                    <p>
-                      <span className="font-medium">{h.movedBy.name}</span>{" "}
-                      {h.fromStage ? (
-                        <>
-                          «{h.fromStage.name}» кезеңінен «{h.toStage.name}» кезеңіне жылжытты
-                        </>
-                      ) : (
-                        <>«{h.toStage.name}» кезеңінде құрды</>
-                      )}
-                    </p>
-                    {h.note && <p className="text-xs italic text-muted-foreground">{h.note}</p>}
-                    <p className="text-xs text-muted-foreground">
-                      {format(h.movedAt, "dd.MM.yyyy HH:mm")}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </CardContent>
-      </Card>
+        </div>
       </div>
 
-      <div className="lg:sticky lg:top-4">
-        <DealAiPanel
+      <div id="notes" className="scroll-mt-4 rounded-xl border bg-background p-4">
+        <p className="mb-3 text-sm font-semibold">Ескертпелер</p>
+        <DealNotes
           dealId={deal.id}
-          temperature={deal.aiTemperature}
-          summary={deal.aiSummary}
-          nextAction={deal.aiNextAction}
-          analyzedAt={deal.aiAnalyzedAt?.toISOString() ?? null}
+          currentUserId={session.user.id}
+          canEditAll={isAdmin}
+          notes={notes.map((n) => ({
+            id: n.id,
+            body: n.body,
+            authorId: n.authorId,
+            authorName: n.author.name,
+            createdAt: n.createdAt.toISOString(),
+            updatedAt: n.updatedAt.toISOString(),
+          }))}
         />
+      </div>
+
+      <div id="history" className="scroll-mt-4 rounded-xl border bg-background p-4">
+        <p className="mb-3 text-sm font-semibold">Кезеңдер тарихы (аудит логы)</p>
+        {history.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Әзірге өзгеріс болған жоқ.</p>
+        ) : (
+          <ol className="flex flex-col gap-3">
+            {history.map((h) => (
+              <li key={h.id} className="flex items-start gap-3 text-sm">
+                <div className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
+                <div>
+                  <p>
+                    <span className="font-medium">{h.movedBy.name}</span>{" "}
+                    {h.fromStage ? (
+                      <>
+                        «{h.fromStage.name}» кезеңінен «{h.toStage.name}» кезеңіне жылжытты
+                      </>
+                    ) : (
+                      <>«{h.toStage.name}» кезеңінде құрды</>
+                    )}
+                  </p>
+                  {h.note && <p className="text-xs italic text-muted-foreground">{h.note}</p>}
+                  <p className="text-xs text-muted-foreground">{format(h.movedAt, "dd.MM.yyyy HH:mm")}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
     </div>
   );

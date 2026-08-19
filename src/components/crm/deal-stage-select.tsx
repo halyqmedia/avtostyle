@@ -23,6 +23,7 @@ export function DealStageSelect({
   disabled?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  const current = stages.find((s) => s.id === currentStageId);
 
   function handleChange(toStageId: string) {
     if (toStageId === currentStageId) return;
@@ -37,7 +38,15 @@ export function DealStageSelect({
 
   return (
     <Select value={currentStageId} onValueChange={handleChange} disabled={disabled || pending}>
-      <SelectTrigger size="sm" className="w-48">
+      <SelectTrigger
+        size="sm"
+        className="w-auto min-w-40 border-0 font-medium"
+        style={
+          current
+            ? { backgroundColor: `${current.color}1a`, color: current.color }
+            : undefined
+        }
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

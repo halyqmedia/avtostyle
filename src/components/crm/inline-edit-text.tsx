@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ export function InlineEditText({
 }: {
   label: string;
   value: string;
-  displayValue?: string;
+  displayValue?: ReactNode;
   type?: "text" | "number";
   onSave: (newValue: string) => Promise<void>;
   disabled?: boolean;
