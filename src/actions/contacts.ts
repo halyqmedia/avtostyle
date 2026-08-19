@@ -250,3 +250,49 @@ export async function updateContact(contactId: string, formData: FormData): Prom
 
   revalidatePath("/campaigns");
 }
+
+export type BulkUpdateResult = { error?: string; updated?: number };
+
+/** Only fields present (non-empty) in the form are changed — everything else stays as-is on every selected contact. */
+export async function bulkUpdateContacts(contactIds: string[], formData: FormData): Promise<BulkUpdateResult> {
+  await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
+  if (contactIds.length === 0) return { error: "Клиент таңдалмаған" };
+
+  const city = String(formData.get("city") ?? "").trim();
+  const profession = String(formData.get("profession") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim();
+  const status = String(formData.get("status") ?? "").trim();
+  const addTags = String(formData.get("addTags") ?? "")
+    .trim()
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  if (!city && !profession && !category && !status && addTags.length === 0) {
+    return { error: "Кемінде бір өрісті толтырыңыз" };
+  }
+
+  const data: Record<string, string> = {};
+  if (city) data.city = city;
+  if (profession) data.profession = profession;
+  if (category) data.category = category;
+  if (status) data.status = status;
+
+  if (addTags.length > 0) {
+    // tags is a Postgres string[] column — updateMany can't append to it per-row, so merge one contact at a time.
+    const rows = await prisma.contact.findMany({ where: { id: { in: contactIds } }, select: { id: true, tags: true } });
+    await prisma.$transaction(
+      rows.map((r) =>
+        prisma.contact.update({
+          where: { id: r.id },
+          data: { ...data, tags: Array.from(new Set([...r.tags, ...addTags])) },
+        }),
+      ),
+    );
+  } else {
+    await prisma.contact.updateMany({ where: { id: { in: contactIds } }, data });
+  }
+
+  revalidatePath("/campaigns");
+  return { updated: contactIds.length };
+}
