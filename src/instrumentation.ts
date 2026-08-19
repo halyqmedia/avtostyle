@@ -1,4 +1,5 @@
 const SEQUENCE_POLL_MS = 15 * 60 * 1000; // how often to check for due drip-sequence steps
+const HOT_LEAD_ESCALATION_POLL_MS = 15 * 60 * 1000; // how often to check for unanswered hot leads
 
 export async function register() {
   // Only the Node runtime holds long-lived state (Baileys sockets, the sequence poller) — this
@@ -8,8 +9,14 @@ export async function register() {
     await reconnectAllSessions();
 
     const { processDueEnrollments } = await import("@/lib/sequence-sender");
-    const runPoll = () => processDueEnrollments().catch((err) => console.error("Sequence poll failed:", err));
-    runPoll();
-    setInterval(runPoll, SEQUENCE_POLL_MS);
+    const runSequencePoll = () => processDueEnrollments().catch((err) => console.error("Sequence poll failed:", err));
+    runSequencePoll();
+    setInterval(runSequencePoll, SEQUENCE_POLL_MS);
+
+    const { processHotLeadEscalations } = await import("@/lib/hot-lead-escalation");
+    const runEscalationPoll = () =>
+      processHotLeadEscalations().catch((err) => console.error("Hot lead escalation poll failed:", err));
+    runEscalationPoll();
+    setInterval(runEscalationPoll, HOT_LEAD_ESCALATION_POLL_MS);
   }
 }

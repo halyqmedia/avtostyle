@@ -90,6 +90,9 @@ export async function analyzeDeal(dealId: string): Promise<void> {
   const targetStage = stages.find((s) => s.key === parsed.stageKey);
   const shouldMoveStage = Boolean(targetStage && targetStage.id !== deal.pipelineStageId);
 
+  const becameHot = temperature === "HOT" && deal.aiTemperature !== "HOT";
+  const cooledDown = temperature !== "HOT" && deal.aiTemperature === "HOT";
+
   await prisma.$transaction(async (tx) => {
     await tx.deal.update({
       where: { id: dealId },
@@ -98,6 +101,10 @@ export async function analyzeDeal(dealId: string): Promise<void> {
         aiSummary: summary,
         aiNextAction: nextAction,
         aiAnalyzedAt: new Date(),
+        // Restarts the 2-hour escalation clock on a fresh HOT read; clears it once the lead
+        // cools back down so a stale escalation flag doesn't linger into the next hot streak.
+        ...(becameHot ? { aiHotSince: new Date(), aiEscalatedAt: null } : {}),
+        ...(cooledDown ? { aiHotSince: null, aiEscalatedAt: null } : {}),
         ...(shouldMoveStage ? { pipelineStageId: targetStage!.id } : {}),
       },
     });
@@ -114,7 +121,6 @@ export async function analyzeDeal(dealId: string): Promise<void> {
     }
   });
 
-  const becameHot = temperature === "HOT" && deal.aiTemperature !== "HOT";
   if (becameHot) {
     await notifyManagerHotLead(deal).catch((err) => console.error("Hot lead notify failed:", err));
   }

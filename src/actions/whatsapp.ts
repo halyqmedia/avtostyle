@@ -62,6 +62,12 @@ export async function sendDealWhatsAppMessage(dealId: string, body: string) {
     },
   });
 
+  // A manager replying by hand counts as "handled" — stop the unanswered-hot-lead escalation clock.
+  await prisma.deal.updateMany({
+    where: { id: dealId, aiHotSince: { not: null } },
+    data: { aiHotSince: null, aiEscalatedAt: null },
+  });
+
   revalidatePath(`/crm/deals/${dealId}`);
 }
 
@@ -136,6 +142,12 @@ export async function sendDealWhatsAppFile(dealId: string, formData: FormData) {
       channel: routing.channel,
       sessionId: routing.channel === "PERSONAL" ? routing.sessionId : undefined,
     },
+  });
+
+  // A manager replying by hand counts as "handled" — stop the unanswered-hot-lead escalation clock.
+  await prisma.deal.updateMany({
+    where: { id: dealId, aiHotSince: { not: null } },
+    data: { aiHotSince: null, aiEscalatedAt: null },
   });
 
   revalidatePath(`/crm/deals/${dealId}`);

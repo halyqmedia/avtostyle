@@ -325,6 +325,8 @@ model Deal {
   aiSummary       String? // AI's short read of where the conversation stands, for the manager's copilot panel
   aiNextAction    String? // AI's concrete suggested next step for the manager
   aiAnalyzedAt    DateTime? // when aiTemperature/aiSummary/aiNextAction were last refreshed
+  aiHotSince      DateTime? // when temperature most recently flipped to HOT — cleared once a human replies or it cools down
+  aiEscalatedAt   DateTime? // set once an unanswered-hot-lead escalation has fired for the current aiHotSince window
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
