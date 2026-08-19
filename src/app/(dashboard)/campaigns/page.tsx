@@ -182,9 +182,14 @@ export default async function CampaignsPage() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base">Рассылкалар</CardTitle>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/campaigns/analytics">Воронка аналитикасы</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/campaigns/quality">Базаның сапасы</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/campaigns/analytics">Воронка аналитикасы</Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {campaigns.length === 0 ? (
