@@ -4,11 +4,21 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
+import { randomUUID } from "node:crypto";
 import { normalizePhone } from "@/lib/phone";
-import { createMetaTemplate, fetchMetaTemplateStatus, extractTemplateVariables } from "@/lib/whatsapp-templates";
+import {
+  createMetaTemplate,
+  fetchMetaTemplateStatus,
+  extractTemplateVariables,
+  uploadResumableExample,
+} from "@/lib/whatsapp-templates";
 import { runCampaignSend } from "@/lib/campaign-sender";
+import { uploadMedia } from "@/lib/media-storage";
 
 export type FormState = { error?: string } | undefined;
+
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_HEADER_FILE_BYTES = 16 * 1024 * 1024;
 
 export async function createTemplate(_prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
@@ -18,6 +28,7 @@ export async function createTemplate(_prev: FormState, formData: FormData): Prom
   const category = String(formData.get("category") ?? "MARKETING") as "MARKETING" | "UTILITY";
   const bodyText = String(formData.get("bodyText") ?? "").trim();
   const example = String(formData.get("example") ?? "").trim();
+  const headerFile = formData.get("headerFile");
 
   if (!name) return { error: "Шаблон атын енгізіңіз" };
   if (!bodyText) return { error: "Шаблон мәтінін енгізіңіз" };
@@ -34,6 +45,28 @@ export async function createTemplate(_prev: FormState, formData: FormData): Prom
   const existing = await prisma.whatsAppTemplate.findUnique({ where: { name } });
   if (existing) return { error: "Бұл атпен шаблон бар болып тұр" };
 
+  let headerType: "IMAGE" | "DOCUMENT" | null = null;
+  let headerMediaKey: string | null = null;
+  let headerMimeType: string | null = null;
+  let headerFileName: string | null = null;
+  let headerHandle: string | undefined;
+
+  if (headerFile instanceof File && headerFile.size > 0) {
+    if (headerFile.size > MAX_HEADER_FILE_BYTES) return { error: "Файл тым үлкен (16MB-тан аспауы керек)" };
+
+    headerType = IMAGE_TYPES.has(headerFile.type) ? "IMAGE" : "DOCUMENT";
+    headerMimeType = headerFile.type || "application/octet-stream";
+    headerFileName = headerType === "DOCUMENT" ? headerFile.name : null;
+
+    const buffer = Buffer.from(await headerFile.arrayBuffer());
+    try {
+      headerMediaKey = await uploadMedia(`whatsapp-templates/${randomUUID()}`, buffer, headerMimeType);
+      headerHandle = await uploadResumableExample(buffer, headerMimeType);
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Файл жүктелмеді" };
+    }
+  }
+
   try {
     const { metaTemplateId, status } = await createMetaTemplate({
       name,
@@ -41,6 +74,7 @@ export async function createTemplate(_prev: FormState, formData: FormData): Prom
       category,
       bodyText,
       examples: variableCount === 1 ? [example] : [],
+      header: headerType && headerHandle ? { format: headerType, handle: headerHandle } : undefined,
     });
 
     await prisma.whatsAppTemplate.create({
@@ -50,6 +84,10 @@ export async function createTemplate(_prev: FormState, formData: FormData): Prom
         category,
         bodyText,
         variableCount,
+        headerType,
+        headerMediaKey,
+        headerMimeType,
+        headerFileName,
         metaTemplateId,
         status,
         createdById: session.user.id,

@@ -1,8 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { sendWhatsAppTemplate, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
+import { sendWhatsAppTemplate, uploadWhatsAppMedia, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
 import { findOrCreateLeadForPhone } from "@/lib/lead-intake";
 import { normalizePhone } from "@/lib/phone";
+import { downloadMedia } from "@/lib/media-storage";
 
 const SEND_GAP_MS = 1500; // pacing between sends — avoid tripping Meta's per-WABA rate/quality limits
 const DAILY_CAP = 200; // conservative default across ALL campaigns combined; raise once the WABA's quality rating is proven over time
@@ -27,6 +28,24 @@ export async function runCampaignSend(campaignId: string): Promise<void> {
   }
 
   await prisma.campaign.update({ where: { id: campaignId }, data: { status: "SENDING", startedAt: new Date() } });
+
+  // The template's header file (if any) is uploaded to Meta once per campaign run and that same
+  // media id is reused for every recipient — re-uploading per-message would be wasteful and slow.
+  let headerMetaMediaId = campaign.headerMetaMediaId;
+  if (campaign.template.headerType && campaign.template.headerMediaKey && !headerMetaMediaId) {
+    try {
+      const buffer = await downloadMedia(campaign.template.headerMediaKey);
+      headerMetaMediaId = await uploadWhatsAppMedia(
+        buffer,
+        campaign.template.headerMimeType ?? "application/octet-stream",
+      );
+      await prisma.campaign.update({ where: { id: campaignId }, data: { headerMetaMediaId } });
+    } catch (err) {
+      await prisma.campaign.update({ where: { id: campaignId }, data: { status: "FAILED" } });
+      console.error("Campaign header upload failed:", campaignId, err);
+      return;
+    }
+  }
 
   const recipients = await prisma.campaignRecipient.findMany({
     where: { campaignId, status: "PENDING" },
@@ -64,11 +83,20 @@ export async function runCampaignSend(campaignId: string): Promise<void> {
       });
 
       const bodyParams = campaign.template.variableCount > 0 ? [recipient.fullName || phone] : [];
+      const header =
+        campaign.template.headerType && headerMetaMediaId
+          ? {
+              format: campaign.template.headerType as "IMAGE" | "DOCUMENT",
+              mediaId: headerMetaMediaId,
+              fileName: campaign.template.headerFileName ?? undefined,
+            }
+          : undefined;
       const { idMessage } = await sendWhatsAppTemplate(
         to,
         campaign.template.name,
         campaign.template.language,
         bodyParams,
+        header,
       );
 
       await prisma.whatsAppMessage.create({

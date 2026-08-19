@@ -49,8 +49,20 @@ export async function sendWhatsAppTemplate(
   templateName: string,
   language: string,
   bodyParams: string[],
+  header?: { format: "IMAGE" | "DOCUMENT"; mediaId: string; fileName?: string },
 ): Promise<{ idMessage: string }> {
   const { phoneNumberId, token } = credentials();
+
+  const components: Record<string, unknown>[] = [];
+  if (header) {
+    const mediaKey = header.format === "IMAGE" ? "image" : "document";
+    const mediaObject: Record<string, string> = { id: header.mediaId };
+    if (header.format === "DOCUMENT" && header.fileName) mediaObject.filename = header.fileName;
+    components.push({ type: "header", parameters: [{ type: mediaKey, [mediaKey]: mediaObject }] });
+  }
+  if (bodyParams.length > 0) {
+    components.push({ type: "body", parameters: bodyParams.map((text) => ({ type: "text", text })) });
+  }
 
   const res = await fetch(`${GRAPH_API}/${phoneNumberId}/messages`, {
     method: "POST",
@@ -62,9 +74,7 @@ export async function sendWhatsAppTemplate(
       template: {
         name: templateName,
         language: { code: language },
-        ...(bodyParams.length > 0
-          ? { components: [{ type: "body", parameters: bodyParams.map((text) => ({ type: "text", text })) }] }
-          : {}),
+        ...(components.length > 0 ? { components } : {}),
       },
     }),
   });

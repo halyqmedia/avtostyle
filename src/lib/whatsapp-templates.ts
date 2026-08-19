@@ -15,11 +15,64 @@ export function extractTemplateVariables(bodyText: string): number[] {
   return matches;
 }
 
+let cachedAppId: string | null = null;
+
+/** The Meta App ID behind our access token — the Resumable Upload API needs it, but we don't store it directly. */
+async function resolveAppId(): Promise<string> {
+  if (cachedAppId) return cachedAppId;
+  const { token } = wabaCredentials();
+
+  const res = await fetch(`${GRAPH_API}/debug_token?input_token=${token}&access_token=${token}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`App ID анықталмады (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as { data?: { app_id?: string } };
+  if (!data.data?.app_id) throw new Error("App ID анықталмады (жауап дұрыс емес)");
+  cachedAppId = data.data.app_id;
+  return cachedAppId;
+}
+
 /**
- * Submits a BODY-only message template to Meta for review. Returns immediately with a PENDING
- * status — approval (or rejection) happens asynchronously on Meta's side, checked later via
- * `syncTemplateStatus`. `examples` must have one realistic value per `{{n}}` placeholder,
- * in order — Meta requires them to review the template.
+ * Uploads a file via Meta's Resumable Upload API and returns a `header_handle` — the format a
+ * template's HEADER example (and only the example) needs at creation time. Two-step handshake:
+ * open a session sized for the file, then push the bytes into it.
+ */
+export async function uploadResumableExample(buffer: Buffer, mimeType: string): Promise<string> {
+  const { token } = wabaCredentials();
+  const appId = await resolveAppId();
+
+  const startRes = await fetch(
+    `${GRAPH_API}/${appId}/uploads?file_length=${buffer.length}&file_type=${encodeURIComponent(mimeType)}&access_token=${token}`,
+    { method: "POST" },
+  );
+  if (!startRes.ok) {
+    const text = await startRes.text().catch(() => "");
+    throw new Error(`Мысал файл жүктеу сессиясы ашылмады (${startRes.status}): ${text.slice(0, 300)}`);
+  }
+  const startData = (await startRes.json()) as { id?: string };
+  if (!startData.id) throw new Error("Мысал файл жүктеу сессиясы ашылмады (жауап дұрыс емес)");
+
+  const pushRes = await fetch(`${GRAPH_API}/${startData.id}`, {
+    method: "POST",
+    headers: { Authorization: `OAuth ${token}`, file_offset: "0" },
+    body: new Uint8Array(buffer),
+  });
+  if (!pushRes.ok) {
+    const text = await pushRes.text().catch(() => "");
+    throw new Error(`Мысал файл жүктелмеді (${pushRes.status}): ${text.slice(0, 300)}`);
+  }
+  const pushData = (await pushRes.json()) as { h?: string };
+  if (!pushData.h) throw new Error("Мысал файл жүктелмеді (handle қайтпады)");
+  return pushData.h;
+}
+
+/**
+ * Submits a message template to Meta for review. Returns immediately with a PENDING status —
+ * approval (or rejection) happens asynchronously on Meta's side, checked later via
+ * `fetchMetaTemplateStatus`. `examples` must have one realistic value per `{{n}}` placeholder,
+ * in order — Meta requires them to review the template. `header` is optional — an approved
+ * example image/document, already uploaded via `uploadResumableExample`.
  */
 export async function createMetaTemplate(opts: {
   name: string;
@@ -27,16 +80,23 @@ export async function createMetaTemplate(opts: {
   category: "MARKETING" | "UTILITY";
   bodyText: string;
   examples: string[];
+  header?: { format: "IMAGE" | "DOCUMENT"; handle: string };
 }): Promise<{ metaTemplateId: string; status: string }> {
   const { wabaId, token } = wabaCredentials();
 
-  const components: Record<string, unknown>[] = [
-    {
-      type: "BODY",
-      text: opts.bodyText,
-      ...(opts.examples.length > 0 ? { example: { body_text: [opts.examples] } } : {}),
-    },
-  ];
+  const components: Record<string, unknown>[] = [];
+  if (opts.header) {
+    components.push({
+      type: "HEADER",
+      format: opts.header.format,
+      example: { header_handle: [opts.header.handle] },
+    });
+  }
+  components.push({
+    type: "BODY",
+    text: opts.bodyText,
+    ...(opts.examples.length > 0 ? { example: { body_text: [opts.examples] } } : {}),
+  });
 
   const res = await fetch(`${GRAPH_API}/${wabaId}/message_templates`, {
     method: "POST",

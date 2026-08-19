@@ -83,6 +83,10 @@ export function CreateTemplateDialog() {
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="headerFile">Сурет немесе файл (міндетті емес)</Label>
+            <Input id="headerFile" name="headerFile" type="file" accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx" />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="bodyText">Мәтін (аты үшін {"{{1}}"} қоюға болады)</Label>
             <textarea
               id="bodyText"

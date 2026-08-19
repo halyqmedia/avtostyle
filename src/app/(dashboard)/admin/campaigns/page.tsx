@@ -61,7 +61,14 @@ export default async function CampaignsPage() {
               <TableBody>
                 {templates.map((t) => (
                   <TableRow key={t.id}>
-                    <TableCell className="font-medium">{t.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {t.name}
+                      {t.headerType && (
+                        <Badge variant="outline" className="ml-2">
+                          {t.headerType === "IMAGE" ? "Сурет" : "Файл"}
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="max-w-xs truncate text-muted-foreground">{t.bodyText}</TableCell>
                     <TableCell className="text-muted-foreground">{t.category}</TableCell>
                     <TableCell>

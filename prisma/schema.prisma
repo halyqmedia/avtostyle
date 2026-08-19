@@ -503,6 +503,10 @@ model WhatsAppTemplate {
   category       String // MARKETING | UTILITY
   bodyText       String // raw template body with {{1}}, {{2}} placeholders
   variableCount  Int      @default(0)
+  headerType     String? // IMAGE | DOCUMENT — null means text-only template
+  headerMediaKey String? // our bucket key for the approved example file, re-uploaded to Meta on each campaign run
+  headerMimeType String?
+  headerFileName String? // DOCUMENT headers only
   metaTemplateId String? // id Meta returned on creation
   status         String   @default("PENDING") // PENDING | APPROVED | REJECTED | PAUSED | DISABLED — synced from Meta
   rejectedReason String?
@@ -526,6 +530,7 @@ model Campaign {
   totalCount  Int      @default(0)
   sentCount   Int      @default(0)
   failedCount Int      @default(0)
+  headerMetaMediaId String? // Meta media id for the template's header file, uploaded once and reused for every recipient in this run
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
