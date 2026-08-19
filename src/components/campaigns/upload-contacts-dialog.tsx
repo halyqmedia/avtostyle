@@ -48,8 +48,8 @@ export function UploadContactsDialog() {
         </DialogHeader>
         <form action={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="contactsFile">Файл (.csv/.txt)</Label>
-            <Input id="contactsFile" name="contactsFile" type="file" accept=".csv,.txt" />
+            <Label htmlFor="contactsFile">Файл (.xlsx/.xls/.csv/.txt)</Label>
+            <Input id="contactsFile" name="contactsFile" type="file" accept=".xlsx,.xls,.csv,.txt" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="contactsText">Немесе тікелей қойыңыз</Label>
@@ -61,8 +61,9 @@ export function UploadContactsDialog() {
               className="w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
             <p className="text-xs text-muted-foreground">
-              Әр жолда: телефон, аты, қала, кәсіп, бағыт, статус, тег(лер, &quot;|&quot; арқылы) — соңғы бағандар міндетті емес.
-              Бұрыннан бар нөмір қайта жүктелсе, деректері жаңарады.
+              Баған реті (Excel-де де, мәтінде де бірдей): телефон, аты, қала, кәсіп, бағыт, статус, тег(лер,
+              &quot;|&quot; арқылы) — соңғы бағандар міндетті емес. Бұрыннан бар нөмір қайта жүктелсе, деректері
+              жаңарады.
             </p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
