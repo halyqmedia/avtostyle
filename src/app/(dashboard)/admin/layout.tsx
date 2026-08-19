@@ -8,6 +8,7 @@ const TABS = [
   { href: "/admin/pipeline-stages", label: "Pipeline кезеңдері" },
   { href: "/admin/quick-replies", label: "Жылдам жауаптар" },
   { href: "/admin/ai-agent", label: "ИИ агент" },
+  { href: "/admin/ai-accuracy", label: "ИИ дәлдігі" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
