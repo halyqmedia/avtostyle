@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
 import { normalizePhone } from "@/lib/phone";
+import { getMediaUrl } from "@/lib/media-storage";
 
 export type FormState = { error?: string } | undefined;
 
@@ -160,6 +161,62 @@ export async function uploadContacts(_prev: FormState, formData: FormData): Prom
 
   revalidatePath("/campaigns");
   return skipped > 0 ? { error: `Жүктелді, бірақ ${skipped} жол дұрыс емес нөмір болғандықтан өткізілді` } : undefined;
+}
+
+export type ContactChatMessage = {
+  id: string;
+  direction: "IN" | "OUT";
+  body: string;
+  createdAt: string;
+  sentByName: string | null;
+  status: string | null;
+  errorMessage: string | null;
+  messageType: string;
+  mediaSrc: string | null;
+  mediaMimeType: string | null;
+  fileName: string | null;
+  aiGenerated: boolean;
+};
+
+/** Contact only gets a deal (and a chat history) once it replies and findOrCreateLeadForPhone links it to a Client. */
+export async function getContactChat(
+  contactId: string,
+): Promise<{ dealId: string | null; messages: ContactChatMessage[] }> {
+  await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
+
+  const contact = await prisma.contact.findUnique({
+    where: { id: contactId },
+    include: { client: { include: { deals: { orderBy: { createdAt: "desc" }, take: 1 } } } },
+  });
+  if (!contact) throw new Error("Клиент табылмады");
+
+  const dealId = contact.client?.deals[0]?.id ?? null;
+  if (!dealId) return { dealId: null, messages: [] };
+
+  const whatsappMessages = await prisma.whatsAppMessage.findMany({
+    where: { dealId },
+    include: { sentBy: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const messages = await Promise.all(
+    whatsappMessages.map(async (m) => ({
+      id: m.id,
+      direction: m.direction as "IN" | "OUT",
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+      sentByName: m.sentBy?.name ?? null,
+      status: m.status,
+      errorMessage: m.errorMessage,
+      messageType: m.messageType,
+      mediaSrc: m.mediaUrl ? await getMediaUrl(m.mediaUrl) : null,
+      mediaMimeType: m.mediaMimeType,
+      fileName: m.fileName,
+      aiGenerated: m.aiGenerated,
+    })),
+  );
+
+  return { dealId, messages };
 }
 
 export async function updateContact(contactId: string, formData: FormData): Promise<void> {
