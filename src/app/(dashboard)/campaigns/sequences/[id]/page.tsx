@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ReactivationToggle } from "@/components/campaigns/reactivation-toggle";
 
 const ENROLLMENT_STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Жүруде",
@@ -52,7 +53,12 @@ export default async function SequenceDetailPage({ params }: { params: Promise<{
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">{sequence.name}</h1>
           <Badge variant={sequence.status === "ACTIVE" ? "default" : "secondary"}>{sequence.status}</Badge>
+          <ReactivationToggle sequenceId={sequence.id} isDefault={sequence.isReactivationDefault} />
         </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Автоматты жандандыру: ИИ «суық» (COLD) деп бағалаған, соңғы хатымыздан кейін 14 күн үнсіз қалған клиенттер
+          осы тізбекке өздігінен қосылады — тек осы белгі қосулы тұрса.
+        </p>
       </div>
 
       <Card>

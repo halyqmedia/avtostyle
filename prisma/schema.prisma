@@ -608,6 +608,7 @@ model Sequence {
   id          String   @id @default(cuid())
   name        String
   status      String   @default("DRAFT") // DRAFT | ACTIVE | PAUSED
+  isReactivationDefault Boolean @default(false) // the one sequence AI-detected cold/silent leads auto-enroll into
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())

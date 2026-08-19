@@ -1,5 +1,6 @@
 const SEQUENCE_POLL_MS = 15 * 60 * 1000; // how often to check for due drip-sequence steps
 const HOT_LEAD_ESCALATION_POLL_MS = 15 * 60 * 1000; // how often to check for unanswered hot leads
+const REACTIVATION_POLL_MS = 60 * 60 * 1000; // day-granularity threshold — hourly is plenty
 
 export async function register() {
   // Only the Node runtime holds long-lived state (Baileys sockets, the sequence poller) — this
@@ -18,5 +19,11 @@ export async function register() {
       processHotLeadEscalations().catch((err) => console.error("Hot lead escalation poll failed:", err));
     runEscalationPoll();
     setInterval(runEscalationPoll, HOT_LEAD_ESCALATION_POLL_MS);
+
+    const { processReactivation } = await import("@/lib/reactivation");
+    const runReactivationPoll = () =>
+      processReactivation().catch((err) => console.error("Reactivation poll failed:", err));
+    runReactivationPoll();
+    setInterval(runReactivationPoll, REACTIVATION_POLL_MS);
   }
 }

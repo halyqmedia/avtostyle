@@ -57,3 +57,16 @@ export async function enrollSelectedContacts(sequenceId: string, contactIds: str
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/sequences/${sequenceId}`);
 }
+
+/** Only one sequence can be the auto-reactivation target — setting it clears the flag off every other one. */
+export async function setReactivationDefault(sequenceId: string, enabled: boolean): Promise<void> {
+  await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
+
+  await prisma.$transaction([
+    prisma.sequence.updateMany({ where: { isReactivationDefault: true }, data: { isReactivationDefault: false } }),
+    ...(enabled ? [prisma.sequence.update({ where: { id: sequenceId }, data: { isReactivationDefault: true } })] : []),
+  ]);
+
+  revalidatePath("/campaigns");
+  revalidatePath(`/campaigns/sequences/${sequenceId}`);
+}
