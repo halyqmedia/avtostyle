@@ -13,6 +13,7 @@ import { DealInfoCard } from "@/components/crm/deal-info-card";
 import { getMediaUrl } from "@/lib/media-storage";
 import { CreateProductionOrderDialog } from "@/components/crm/create-production-order-dialog";
 import { DealAiToggle } from "@/components/crm/deal-ai-toggle";
+import { DealAiPanel } from "@/components/crm/deal-ai-panel";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
@@ -101,7 +102,8 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   const prepayment = Number(deal.prepayment);
 
   return (
-    <div className="grid max-w-3xl gap-4">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,48rem)_320px] lg:items-start">
+      <div className="flex flex-col gap-4">
       <div>
         <Link
           href="/crm"
@@ -235,6 +237,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                         <>«{h.toStage.name}» кезеңінде құрды</>
                       )}
                     </p>
+                    {h.note && <p className="text-xs italic text-muted-foreground">{h.note}</p>}
                     <p className="text-xs text-muted-foreground">
                       {format(h.movedAt, "dd.MM.yyyy HH:mm")}
                     </p>
@@ -245,6 +248,17 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
           )}
         </CardContent>
       </Card>
+      </div>
+
+      <div className="lg:sticky lg:top-4">
+        <DealAiPanel
+          dealId={deal.id}
+          temperature={deal.aiTemperature}
+          summary={deal.aiSummary}
+          nextAction={deal.aiNextAction}
+          analyzedAt={deal.aiAnalyzedAt?.toISOString() ?? null}
+        />
+      </div>
     </div>
   );
 }

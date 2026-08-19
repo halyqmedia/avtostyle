@@ -16,6 +16,8 @@ export async function callGemini(args: {
   systemPrompt: string;
   history: ChatTurn[];
   maxOutputTokens: number;
+  /** Forces Gemini to return raw JSON text (no markdown fences) — used for structured analysis calls. */
+  jsonMode?: boolean;
 }): Promise<GeminiReply> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Gemini API кілті бапталмаған (GEMINI_API_KEY жоқ)");
@@ -26,7 +28,11 @@ export async function callGemini(args: {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: args.systemPrompt }] },
       contents: args.history.map((h) => ({ role: h.role, parts: [{ text: h.text }] })),
-      generationConfig: { maxOutputTokens: args.maxOutputTokens, temperature: 0.6 },
+      generationConfig: {
+        maxOutputTokens: args.maxOutputTokens,
+        temperature: args.jsonMode ? 0.2 : 0.6,
+        ...(args.jsonMode ? { responseMimeType: "application/json" } : {}),
+      },
     }),
   });
 

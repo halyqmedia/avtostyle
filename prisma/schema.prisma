@@ -321,6 +321,10 @@ model Deal {
   source          String?
   comment         String?
   aiEnabled       Boolean       @default(true) // AI agent auto-replies on WhatsApp while true; a manager can take over any time
+  aiTemperature   String? // HOT | WARM | COLD — AI's read of how close this lead is to buying, from the last analyzed conversation
+  aiSummary       String? // AI's short read of where the conversation stands, for the manager's copilot panel
+  aiNextAction    String? // AI's concrete suggested next step for the manager
+  aiAnalyzedAt    DateTime? // when aiTemperature/aiSummary/aiNextAction were last refreshed
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 

@@ -9,6 +9,7 @@ import { writeStageHistory } from "@/lib/stage-history";
 import { assertDealAccess } from "@/lib/deal-access";
 import { normalizePhone } from "@/lib/phone";
 import { postSalesPayment } from "@/lib/transactions";
+import { analyzeDeal } from "@/lib/ai-deal-analysis";
 
 const createDealSchema = z.object({
   title: z.string().min(2, "Атауын енгізіңіз"),
@@ -165,6 +166,13 @@ export async function updateDealAmount(dealId: string, amount: number) {
   await assertDealEditAccess(dealId);
   if (!Number.isFinite(amount) || amount < 0) throw new Error("Сома дұрыс емес");
   await prisma.deal.update({ where: { id: dealId }, data: { amount } });
+  revalidatePath(`/crm/deals/${dealId}`);
+  revalidatePath("/crm");
+}
+
+export async function runAiAnalysis(dealId: string) {
+  await assertDealAccess(dealId);
+  await analyzeDeal(dealId);
   revalidatePath(`/crm/deals/${dealId}`);
   revalidatePath("/crm");
 }

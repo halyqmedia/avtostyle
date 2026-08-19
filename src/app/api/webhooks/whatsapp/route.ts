@@ -5,6 +5,7 @@ import { downloadWhatsAppMedia } from "@/lib/whatsapp-cloud";
 import { uploadMedia } from "@/lib/media-storage";
 import { normalizePhone } from "@/lib/phone";
 import { maybeSendAiReply } from "@/lib/ai-agent";
+import { analyzeDeal } from "@/lib/ai-deal-analysis";
 import { findOrCreateLeadForPhone } from "@/lib/lead-intake";
 import { markEnrollmentsReplied } from "@/lib/sequence-sender";
 
@@ -179,6 +180,11 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
       await maybeSendAiReply(dealId);
     } catch (err) {
       console.error("AI agent reply failed:", err);
+    }
+    try {
+      await analyzeDeal(dealId);
+    } catch (err) {
+      console.error("AI deal analysis failed:", err);
     }
   }
 

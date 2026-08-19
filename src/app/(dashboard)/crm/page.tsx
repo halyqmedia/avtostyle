@@ -37,6 +37,7 @@ export default async function CrmPage() {
     assignedToId: d.assignedToId,
     assigneeName: d.assignedTo?.name ?? null,
     source: d.source,
+    aiTemperature: d.aiTemperature,
   }));
 
   const assignees = Array.from(

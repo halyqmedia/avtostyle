@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
+import { Flame } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ export type KanbanDeal = {
   assignedToId: string | null;
   assigneeName: string | null;
   source: string | null;
+  aiTemperature: string | null;
 };
 
 function formatMoney(n: number) {
@@ -57,9 +59,14 @@ export function DealCard({ deal, disabled }: { deal: KanbanDeal; disabled?: bool
         isDragging && "z-10 opacity-60 shadow-md",
       )}
     >
-      <Link href={`/crm/deals/${deal.id}`} className="font-medium leading-tight hover:underline">
-        {deal.title}
-      </Link>
+      <div className="flex items-center gap-1.5">
+        <Link href={`/crm/deals/${deal.id}`} className="font-medium leading-tight hover:underline">
+          {deal.title}
+        </Link>
+        {deal.aiTemperature === "HOT" && (
+          <Flame className="size-3.5 shrink-0 text-destructive" aria-label="Қызып тұрған лид" />
+        )}
+      </div>
       <p className="text-xs text-muted-foreground">{deal.clientName}</p>
       {deal.productName && <p className="text-xs text-muted-foreground">{deal.productName}</p>}
       <div className="mt-1 flex items-center justify-between">
