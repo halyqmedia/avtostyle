@@ -7,13 +7,14 @@ import { requirePermission } from "@/lib/auth-guard";
 import { assertDealAccess } from "@/lib/deal-access";
 import { PERMISSIONS } from "@/lib/permissions";
 
-const DEFAULT_SYSTEM_PROMPT = `Сен Avtostyle компаниясының сату менеджерісің. Компания EVA/3D резеңке автоковриктер сатады.
+// Seed default for a fresh install only — the live prompt actually driving the agent is
+// whatever's stored in the ai_settings row, edited from /admin/ai-agent (or by an operator
+// directly, e.g. when "training" it on a new commercial offer — see AVTOSTYLE TPE 7D dealer
+// program, 2026-08-19).
+const DEFAULT_SYSTEM_PROMPT = `Сен Avtostyle компаниясының сату менеджерісің.
 Клиентпен WhatsApp арқылы қазақша/орысша сөйлес, қысқа әрі нақты жауап бер.
-Клиенттің көлік маркасын, моделін, жылын сұра, содан кейін сәйкес өнімді ұсын.
-Бағаны нақты айт, көлеңкелі уәде берме. Мақсат — клиентті сатып алуға дейін жеткізу
-(алдын ала төлем алу немесе жеткізу мекенжайын нақтылау). Егер клиент күрделі/арнайы
-сұрақ қойса немесе ашуланса, "қазір маманға қосамын" деп жауап беріп, адам менеджерге
-жеткізетінімізді айт.`;
+Бағаны нақты айт, көлеңкелі уәде берме. Егер клиент күрделі/арнайы сұрақ қойса немесе
+ашуланса, "қазір маманға қосамын" деп жауап беріп, адам менеджерге жеткізетінімізді айт.`;
 
 const updateSettingsSchema = z.object({
   enabled: z.boolean(),

@@ -31,19 +31,10 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
   // last message again, or talking over a manager who just answered manually.
   if (recentMessages[recentMessages.length - 1].direction !== "IN") return;
 
-  const products = await prisma.product.findMany({
-    where: { isActive: true, category: "finished" },
-    orderBy: { name: "asc" },
-    take: 30,
-  });
-  const catalogLine = products.map((p) => `${p.name} — ${Number(p.price)}₸`).join("; ");
-
-  const systemPrompt = [
-    settings.systemPrompt,
-    "",
-    `Тауар каталогы: ${catalogLine || "каталог бос"}.`,
-    `Клиенттің аты: ${deal.client.fullName}.`,
-  ].join("\n");
+  // No product-catalog injection here on purpose: the agent's offer (dealer program, pricing
+  // tiers, terms) lives entirely in settings.systemPrompt now — the old per-unit retail Product
+  // table is B2C EVA/3D pricing, unrelated to (and actively confusable with) that offer.
+  const systemPrompt = [settings.systemPrompt, "", `Клиенттің аты: ${deal.client.fullName}.`].join("\n");
 
   const history = recentMessages.map((m) => ({
     role: (m.direction === "IN" ? "user" : "model") as "user" | "model",
