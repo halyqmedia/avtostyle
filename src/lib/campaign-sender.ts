@@ -12,6 +12,10 @@ const SEND_GAP_MS = 1500; // pacing between sends — avoid tripping Meta's per-
  * Paced background broadcast loop — runs to completion in this process (a persistent Railway
  * container, not a serverless function) after the `sendCampaign` action returns, the same way
  * Baileys sessions keep running past their triggering request. Not meant to be awaited by callers.
+ *
+ * Always sends through the Cloud API (WABA) — never a manager's personal Baileys session. Bulk
+ * template sends are exactly the kind of traffic pattern that gets a personal number banned;
+ * only the shared, Meta-managed WABA number is meant to carry campaign/sequence volume.
  */
 export async function runCampaignSend(campaignId: string): Promise<void> {
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, include: { template: true } });

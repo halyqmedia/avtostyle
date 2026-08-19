@@ -8,6 +8,10 @@ import { hasReachedDailyTemplateCap } from "@/lib/template-send-throttle";
 
 const SEND_GAP_MS = 1500; // same pacing as campaign-sender — one shared WABA, one shared rhythm
 
+// Every step send in this file goes through sendWhatsAppTemplate (Cloud API / WABA) — never a
+// manager's personal Baileys session. Drip volume is exactly the traffic pattern that risks a
+// personal number getting banned; only the shared, Meta-managed WABA number carries it.
+
 /** Enrolls a set of Contacts in a Sequence, due for step 1 after that step's delayDays. */
 export async function enrollContacts(sequenceId: string, contactIds: string[]): Promise<void> {
   const sequence = await prisma.sequence.findUnique({
