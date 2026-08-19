@@ -76,6 +76,16 @@ export async function startSession(sessionId: string, userId: string): Promise<v
         await prisma.whatsAppSession
           .update({ where: { id: sessionId }, data: { status: "LOGGED_OUT", qr: null, phoneNumber: null } })
           .catch(() => {});
+        // Dynamic import avoids a static cycle with admin-notify (which itself calls back into
+        // this module's sendPersonalText) — this branch is rare enough that the extra await is fine.
+        import("@/lib/admin-notify")
+          .then(async ({ notifyAllAdmins }) => {
+            const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+            await notifyAllAdmins(
+              `⚠️ ${user?.name ?? "Менеджердің"} жеке WhatsApp-ы (Baileys) ажырады — қайта қосу үшін QR кодты жаңадан сканерлеу керек.\n\n"Менің WhatsApp-ым" бетінен қайта қосыңыз.`,
+            );
+          })
+          .catch((err) => console.error("Session logged-out notify failed:", err));
       } else {
         await prisma.whatsAppSession
           .update({

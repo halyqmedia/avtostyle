@@ -1,7 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { toBaileysJid } from "@/lib/baileys/jid";
-import { sendPersonalText } from "@/lib/baileys/session-manager";
+import { notifyAllAdmins } from "@/lib/admin-notify";
 
 const ESCALATION_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours unanswered
 
@@ -30,11 +29,6 @@ export async function processHotLeadEscalations(): Promise<void> {
   });
   if (dueDeals.length === 0) return;
 
-  const admins = await prisma.user.findMany({
-    where: { role: { key: "ADMIN" }, isActive: true },
-    include: { whatsappSession: true },
-  });
-
   for (const deal of dueDeals) {
     const url = dealUrl(deal.id);
     const text = [
@@ -47,18 +41,7 @@ export async function processHotLeadEscalations(): Promise<void> {
       url,
     ].filter((line) => line !== null);
 
-    for (const admin of admins) {
-      const session = admin.whatsappSession;
-      if (!session || session.status !== "CONNECTED" || !session.phoneNumber) continue;
-      const ownJid = toBaileysJid(session.phoneNumber);
-      if (!ownJid) continue;
-      try {
-        await sendPersonalText(session.id, ownJid, text.join("\n"));
-      } catch (err) {
-        console.error("Hot lead escalation notify failed:", err);
-      }
-    }
-
+    await notifyAllAdmins(text.join("\n"));
     await prisma.deal.update({ where: { id: deal.id }, data: { aiEscalatedAt: new Date() } });
   }
 }
