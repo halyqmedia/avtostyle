@@ -33,6 +33,8 @@ model User {
   transactionsLogged Transaction[]     @relation("TransactionCreator")
   aiSettingsUpdates  AiSettings[]
   whatsappSession    WhatsAppSession?
+  whatsappTemplates  WhatsAppTemplate[]
+  campaigns          Campaign[]
 
   @@map("users")
 }
@@ -489,6 +491,70 @@ model InboundWebhookEvent {
   receivedAt DateTime @default(now())
 
   @@map("inbound_webhook_events")
+}
+
+/// A Meta-approved WhatsApp message template — the only way to message a client who hasn't
+/// written in the last 24h (Cloud API rejects free-form text outside that window), so every
+/// broadcast Campaign sends one of these rather than plain text.
+model WhatsAppTemplate {
+  id             String   @id @default(cuid())
+  name           String   @unique // Meta template name: lowercase_snake_case, immutable once created
+  language       String   @default("kk")
+  category       String // MARKETING | UTILITY
+  bodyText       String // raw template body with {{1}}, {{2}} placeholders
+  variableCount  Int      @default(0)
+  metaTemplateId String? // id Meta returned on creation
+  status         String   @default("PENDING") // PENDING | APPROVED | REJECTED | PAUSED | DISABLED — synced from Meta
+  rejectedReason String?
+  createdById    String
+  createdBy      User     @relation(fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  campaigns Campaign[]
+
+  @@map("whatsapp_templates")
+}
+
+/// A bulk send job: one approved template fanned out to an uploaded contact list.
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  templateId  String
+  template    WhatsAppTemplate @relation(fields: [templateId], references: [id])
+  status      String   @default("DRAFT") // DRAFT | SENDING | COMPLETED | FAILED
+  totalCount  Int      @default(0)
+  sentCount   Int      @default(0)
+  failedCount Int      @default(0)
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  recipients CampaignRecipient[]
+
+  @@map("campaigns")
+}
+
+/// One uploaded contact within a Campaign — tracks its own send/delivery status independent of
+/// the others, since a bulk send runs as a paced background loop that can take a while.
+model CampaignRecipient {
+  id                String    @id @default(cuid())
+  campaignId        String
+  campaign          Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  phone             String
+  fullName          String?
+  status            String    @default("PENDING") // PENDING | SENT | DELIVERED | READ | FAILED
+  errorMessage      String?
+  dealId            String? // the Client/Deal this recipient resolved to — replies land there, AI agent takes over
+  whatsappMessageId String?
+  sentAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([campaignId])
+  @@index([whatsappMessageId])
+  @@map("campaign_recipients")
 }
 
 // -----------------------------------------------------------------------

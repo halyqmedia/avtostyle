@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { uploadMedia } from "@/lib/media-storage";
 import { normalizePhone } from "@/lib/phone";
 import { jidToDigits, isPersonalChatJid } from "@/lib/baileys/jid";
+import { findOrCreateLeadForPhone } from "@/lib/lead-intake";
 
 type ParsedMessageType = "text" | "image" | "audio" | "video" | "document";
 
@@ -70,44 +71,16 @@ export async function handleBaileysMessage(sessionId: string, ownerUserId: strin
     }
   }
 
-  const defaultStage = await prisma.pipelineStage.findFirst({ where: { pipeline: "SALES", isDefault: true } });
-  if (!defaultStage) return;
-
-  let client = await prisma.client.findUnique({ where: { phone } });
-  if (!client) {
-    client = await prisma.client.create({
-      data: { fullName: phone, phone, whatsappId: digits, source: "whatsapp" },
-    });
-  } else if (client.whatsappId !== digits) {
-    client = await prisma.client.update({ where: { id: client.id }, data: { whatsappId: digits } });
-  }
-
-  const existingActiveDeal = await prisma.deal.findFirst({
-    where: { clientId: client.id, pipelineStage: { isFinal: false } },
-    orderBy: { createdAt: "desc" },
+  const { dealId } = await findOrCreateLeadForPhone({
+    phone,
+    whatsappDigits: digits,
+    fallbackName: phone,
+    source: "whatsapp",
+    createdById: ownerUserId,
+    assignedToId: ownerUserId,
+    dealTitle: phone,
+    dealComment: text || undefined,
   });
-
-  let dealId: string;
-  if (existingActiveDeal) {
-    dealId = existingActiveDeal.id;
-    if (!existingActiveDeal.assignedToId) {
-      await prisma.deal.update({ where: { id: dealId }, data: { assignedToId: ownerUserId } });
-    }
-  } else {
-    const deal = await prisma.deal.create({
-      data: {
-        title: client.phone ?? phone,
-        clientId: client.id,
-        amount: 0,
-        pipelineStageId: defaultStage.id,
-        createdById: ownerUserId,
-        assignedToId: ownerUserId,
-        source: "whatsapp",
-        comment: text || undefined,
-      },
-    });
-    dealId = deal.id;
-  }
 
   await prisma.whatsAppMessage.create({
     data: {

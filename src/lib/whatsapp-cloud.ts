@@ -39,6 +39,47 @@ export async function sendWhatsAppMessage(to: string, message: string): Promise<
   return { idMessage };
 }
 
+/**
+ * Sends an approved message template — the only Cloud API message type Meta allows outside the
+ * 24h customer-service window, so every broadcast/campaign send goes through this, not
+ * `sendWhatsAppMessage`. `bodyParams` fill the template's `{{1}}`, `{{2}}`, ... in order.
+ */
+export async function sendWhatsAppTemplate(
+  to: string,
+  templateName: string,
+  language: string,
+  bodyParams: string[],
+): Promise<{ idMessage: string }> {
+  const { phoneNumberId, token } = credentials();
+
+  const res = await fetch(`${GRAPH_API}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: language },
+        ...(bodyParams.length > 0
+          ? { components: [{ type: "body", parameters: bodyParams.map((text) => ({ type: "text", text })) }] }
+          : {}),
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Шаблон хабарламасы жіберілмеді (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = (await res.json()) as { messages?: { id?: string }[] };
+  const idMessage = data.messages?.[0]?.id;
+  if (!idMessage) throw new Error("Шаблон хабарламасы жіберілмеді (жауап дұрыс емес)");
+  return { idMessage };
+}
+
 /** Uploads a file to Meta (required before referencing it in a media message) and returns its media id. */
 export async function uploadWhatsAppMedia(buffer: Buffer, mimeType: string): Promise<string> {
   const { phoneNumberId, token } = credentials();

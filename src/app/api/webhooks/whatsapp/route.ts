@@ -5,6 +5,7 @@ import { downloadWhatsAppMedia } from "@/lib/whatsapp-cloud";
 import { uploadMedia } from "@/lib/media-storage";
 import { normalizePhone } from "@/lib/phone";
 import { maybeSendAiReply } from "@/lib/ai-agent";
+import { findOrCreateLeadForPhone } from "@/lib/lead-intake";
 
 /**
  * Meta WhatsApp Cloud API webhook (https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks).
@@ -134,48 +135,22 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
 
   const text = msg.type === "text" ? msg.text?.body : media?.caption;
 
-  const defaultStage = await prisma.pipelineStage.findFirst({
-    where: { pipeline: "SALES", isDefault: true },
-  });
   const systemUser = await prisma.user.findFirst({ where: { role: { key: "ADMIN" } } });
-  if (!defaultStage || !systemUser) return undefined;
+  if (!systemUser) return undefined;
 
   const phone = normalizePhone(waId) ?? `+${waId}`;
-  let client = await prisma.client.findUnique({ where: { phone } });
-  if (!client) {
-    client = await prisma.client.create({
-      data: { fullName: senderName, phone, whatsappId: waId, source: "whatsapp" },
-    });
-  } else if (client.whatsappId !== waId) {
-    // wa_id format changed (e.g. Green API "xxx@c.us" -> Cloud API "xxx") — heal it so this
-    // client keeps matching by phone regardless of which API last touched their whatsappId.
-    client = await prisma.client.update({ where: { id: client.id }, data: { whatsappId: waId } });
-  }
-
-  const existingActiveDeal = await prisma.deal.findFirst({
-    where: { clientId: client.id, pipelineStage: { isFinal: false } },
-    orderBy: { createdAt: "desc" },
+  // wa_id format can change between providers (e.g. Green API "xxx@c.us" -> Cloud API "xxx") —
+  // findOrCreateLeadForPhone heals whatsappId so this client keeps matching by phone regardless.
+  const { dealId } = await findOrCreateLeadForPhone({
+    phone,
+    whatsappDigits: waId,
+    fallbackName: senderName,
+    source: "whatsapp",
+    createdById: systemUser.id,
+    // Temporary placeholder title — the assigned manager renames it once they've spoken to the client.
+    dealTitle: phone,
+    dealComment: text,
   });
-
-  let dealId: string;
-  if (existingActiveDeal) {
-    // Repeat message from a client who already has an open lead — just log it, don't spawn a duplicate.
-    dealId = existingActiveDeal.id;
-  } else {
-    const deal = await prisma.deal.create({
-      data: {
-        // Temporary placeholder — the assigned manager renames it once they've spoken to the client.
-        title: client.phone ?? `+${waId}`,
-        clientId: client.id,
-        amount: 0,
-        pipelineStageId: defaultStage.id,
-        createdById: systemUser.id,
-        source: "whatsapp",
-        comment: text,
-      },
-    });
-    dealId = deal.id;
-  }
 
   await prisma.whatsAppMessage.create({
     data: {
@@ -205,14 +180,19 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
 }
 
 async function handleStatusUpdate(status: CloudStatus) {
-  const message = await prisma.whatsAppMessage.findFirst({ where: { whatsappMessageId: status.id } });
-  if (!message) return;
+  const normalizedStatus = status.status.toUpperCase();
+  const errorMessage = status.errors?.[0]?.title;
 
-  await prisma.whatsAppMessage.update({
-    where: { id: message.id },
-    data: {
-      status: status.status.toUpperCase(),
-      errorMessage: status.errors?.[0]?.title,
-    },
-  });
+  const message = await prisma.whatsAppMessage.findFirst({ where: { whatsappMessageId: status.id } });
+  if (message) {
+    await prisma.whatsAppMessage.update({
+      where: { id: message.id },
+      data: { status: normalizedStatus, errorMessage },
+    });
+  }
+
+  // Mirror delivery status onto the campaign recipient row, if this message was a broadcast send.
+  await prisma.campaignRecipient
+    .updateMany({ where: { whatsappMessageId: status.id }, data: { status: normalizedStatus, errorMessage } })
+    .catch(() => {});
 }
