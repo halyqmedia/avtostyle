@@ -23,6 +23,13 @@ export type CrmFiltersState = {
   assignedToId: string | null;
   productId: string | null;
   source: string | null;
+  temperature: string | null;
+};
+
+const TEMPERATURE_LABELS: Record<string, string> = {
+  HOT: "🔥 Қызып тұр",
+  WARM: "Қызығушылық бар",
+  COLD: "Салқын",
 };
 
 export function CrmFilters({
@@ -45,7 +52,11 @@ export function CrmFilters({
   totalCount: number;
 }) {
   const hasActiveFilters =
-    value.search !== "" || value.assignedToId !== null || value.productId !== null || value.source !== null;
+    value.search !== "" ||
+    value.assignedToId !== null ||
+    value.productId !== null ||
+    value.source !== null ||
+    value.temperature !== null;
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -115,11 +126,28 @@ export function CrmFilters({
           </Select>
         )}
 
+        <Select
+          value={value.temperature ?? "all"}
+          onValueChange={(v) => onChange({ ...value, temperature: v === "all" ? null : v })}
+        >
+          <SelectTrigger size="sm" className="w-40">
+            <SelectValue placeholder="Жылу" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Барлық жылу</SelectItem>
+            {Object.entries(TEMPERATURE_LABELS).map(([key, label]) => (
+              <SelectItem key={key} value={key}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {hasActiveFilters && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onChange({ search: "", assignedToId: null, productId: null, source: null })}
+            onClick={() => onChange({ search: "", assignedToId: null, productId: null, source: null, temperature: null })}
           >
             <X className="size-3.5" />
             Тазалау

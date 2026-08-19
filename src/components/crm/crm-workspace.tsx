@@ -32,6 +32,7 @@ export function CrmWorkspace({
     assignedToId: null,
     productId: null,
     source: null,
+    temperature: null,
   });
 
   const sources = useMemo(
@@ -45,6 +46,7 @@ export function CrmWorkspace({
       if (filters.assignedToId && d.assignedToId !== filters.assignedToId) return false;
       if (filters.productId && d.productId !== filters.productId) return false;
       if (filters.source && d.source !== filters.source) return false;
+      if (filters.temperature && d.aiTemperature !== filters.temperature) return false;
       if (search) {
         const haystack = [d.title, d.clientName, d.clientPhone, d.productName, d.assigneeName]
           .filter(Boolean)
