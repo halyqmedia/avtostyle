@@ -36,6 +36,7 @@ model User {
   whatsappTemplates  WhatsAppTemplate[]
   campaigns          Campaign[]
   contacts           Contact[]
+  sequences          Sequence[]
 
   @@map("users")
 }
@@ -131,7 +132,8 @@ model Contact {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  campaignRecipients CampaignRecipient[]
+  campaignRecipients  CampaignRecipient[]
+  sequenceEnrollments SequenceEnrollment[]
 
   @@map("contacts")
 }
@@ -534,6 +536,8 @@ model WhatsAppTemplate {
   headerMediaKey String? // our bucket key for the approved example file, re-uploaded to Meta on each campaign run
   headerMimeType String?
   headerFileName String? // DOCUMENT headers only
+  footerText     String? // small grey opt-out line, e.g. "Жазылымнан бас тарту үшін «Стоп» деп жазыңыз"
+  buttons        String[] @default([]) // up to 3 quick-reply button labels (≤25 chars each) — static, no {{n}} params
   metaTemplateId String? // id Meta returned on creation
   status         String   @default("PENDING") // PENDING | APPROVED | REJECTED | PAUSED | DISABLED — synced from Meta
   rejectedReason String?
@@ -542,7 +546,8 @@ model WhatsAppTemplate {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  campaigns Campaign[]
+  campaigns     Campaign[]
+  sequenceSteps SequenceStep[]
 
   @@map("whatsapp_templates")
 }
@@ -588,6 +593,60 @@ model CampaignRecipient {
   @@index([contactId])
   @@index([whatsappMessageId])
   @@map("campaign_recipients")
+}
+
+/// A multi-touch drip playbook (e.g. first touch → reminder after 3 days → final notice after
+/// 4 more days) — an enrolled Contact advances one SequenceStep at a time and stops the moment
+/// they reply, unlike a Campaign which is always a single one-shot send.
+model Sequence {
+  id          String   @id @default(cuid())
+  name        String
+  status      String   @default("DRAFT") // DRAFT | ACTIVE | PAUSED
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  steps       SequenceStep[]
+  enrollments SequenceEnrollment[]
+
+  @@map("sequences")
+}
+
+model SequenceStep {
+  id         String   @id @default(cuid())
+  sequenceId String
+  sequence   Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  order      Int // 1, 2, 3... — send order within the sequence
+  templateId String
+  template   WhatsAppTemplate @relation(fields: [templateId], references: [id])
+  delayDays  Int // days after the previous step (or after enrollment, for step 1) before sending — only if the contact hasn't replied yet
+  headerMetaMediaId String? // this step's template header file, uploaded to Meta once and reused for every enrollment
+  createdAt  DateTime @default(now())
+
+  @@unique([sequenceId, order])
+  @@map("sequence_steps")
+}
+
+/// One Contact's progress through a Sequence. `nextSendAt` is what the background scheduler
+/// polls; a reply (webhook inbound, including a quick-reply button tap) flips status to REPLIED
+/// and the enrollment stops advancing — the whole point of a drip vs. a plain broadcast.
+model SequenceEnrollment {
+  id                String    @id @default(cuid())
+  sequenceId        String
+  sequence          Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  contactId         String
+  contact           Contact   @relation(fields: [contactId], references: [id])
+  currentStep       Int       @default(0) // 0 = step 1 not sent yet
+  status            String    @default("ACTIVE") // ACTIVE | REPLIED | COMPLETED | STOPPED | FAILED
+  lastSentAt        DateTime?
+  nextSendAt        DateTime?
+  dealId            String?
+  whatsappMessageId String? // most recently sent step's message id
+  enrolledAt        DateTime  @default(now())
+
+  @@unique([sequenceId, contactId])
+  @@index([status, nextSendAt])
+  @@map("sequence_enrollments")
 }
 
 // -----------------------------------------------------------------------

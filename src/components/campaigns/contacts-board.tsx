@@ -16,6 +16,7 @@ import {
   CreateCampaignFromSelectionDialog,
   type ApprovedTemplateOption,
 } from "@/components/campaigns/create-campaign-from-selection-dialog";
+import { EnrollInSequenceDialog, type SequenceOption } from "@/components/campaigns/enroll-in-sequence-dialog";
 
 const ALL = "__all__";
 
@@ -29,6 +30,7 @@ export function ContactsBoard({
   statuses,
   tags,
   templates,
+  sequences,
 }: {
   contacts: BoardContact[];
   cities: string[];
@@ -37,6 +39,7 @@ export function ContactsBoard({
   statuses: string[];
   tags: string[];
   templates: ApprovedTemplateOption[];
+  sequences: SequenceOption[];
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -47,6 +50,7 @@ export function ContactsBoard({
   const [tag, setTag] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
+  const [sequenceDialogOpen, setSequenceDialogOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -121,6 +125,13 @@ export function ContactsBoard({
         </div>
         <div className="flex items-center gap-2">
           <UploadContactsDialog />
+          <Button
+            variant="outline"
+            disabled={selected.size === 0}
+            onClick={() => setSequenceDialogOpen(true)}
+          >
+            Тізбекке қосу ({selected.size})
+          </Button>
           <Button disabled={selected.size === 0} onClick={() => setCampaignDialogOpen(true)}>
             Рассылка жасау ({selected.size})
           </Button>
@@ -197,6 +208,17 @@ export function ContactsBoard({
         selectedIds={[...selected]}
         templates={templates}
         onCreated={() => {
+          setSelected(new Set());
+          router.refresh();
+        }}
+      />
+
+      <EnrollInSequenceDialog
+        open={sequenceDialogOpen}
+        onOpenChange={setSequenceDialogOpen}
+        selectedIds={[...selected]}
+        sequences={sequences}
+        onEnrolled={() => {
           setSelected(new Set());
           router.refresh();
         }}

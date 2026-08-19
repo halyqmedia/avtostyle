@@ -81,6 +81,8 @@ export async function createMetaTemplate(opts: {
   bodyText: string;
   examples: string[];
   header?: { format: "IMAGE" | "DOCUMENT"; handle: string };
+  footerText?: string;
+  buttons?: string[]; // quick-reply labels, ≤25 chars each, max 3
 }): Promise<{ metaTemplateId: string; status: string }> {
   const { wabaId, token } = wabaCredentials();
 
@@ -97,6 +99,15 @@ export async function createMetaTemplate(opts: {
     text: opts.bodyText,
     ...(opts.examples.length > 0 ? { example: { body_text: [opts.examples] } } : {}),
   });
+  if (opts.footerText) {
+    components.push({ type: "FOOTER", text: opts.footerText });
+  }
+  if (opts.buttons && opts.buttons.length > 0) {
+    components.push({
+      type: "BUTTONS",
+      buttons: opts.buttons.map((text) => ({ type: "QUICK_REPLY", text })),
+    });
+  }
 
   const res = await fetch(`${GRAPH_API}/${wabaId}/message_templates`, {
     method: "POST",

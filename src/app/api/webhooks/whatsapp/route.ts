@@ -6,6 +6,7 @@ import { uploadMedia } from "@/lib/media-storage";
 import { normalizePhone } from "@/lib/phone";
 import { maybeSendAiReply } from "@/lib/ai-agent";
 import { findOrCreateLeadForPhone } from "@/lib/lead-intake";
+import { markEnrollmentsReplied } from "@/lib/sequence-sender";
 
 /**
  * Meta WhatsApp Cloud API webhook (https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks).
@@ -52,6 +53,7 @@ type CloudMessage = {
   document?: CloudMedia;
   audio?: CloudMedia;
   video?: CloudMedia;
+  button?: { text: string; payload: string }; // quick-reply tap on a template message
 };
 
 type CloudStatus = {
@@ -133,7 +135,7 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
     mediaMimeType = mimeType;
   }
 
-  const text = msg.type === "text" ? msg.text?.body : media?.caption;
+  const text = msg.type === "text" ? msg.text?.body : msg.type === "button" ? msg.button?.text : media?.caption;
 
   const systemUser = await prisma.user.findFirst({ where: { role: { key: "ADMIN" } } });
   if (!systemUser) return undefined;
@@ -166,7 +168,11 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
     },
   });
 
-  if (msg.type === "text") {
+  // Any reply — including a quick-reply button tap — stops a running drip sequence for this
+  // contact; the whole point of a sequence is to back off once the person actually responds.
+  await markEnrollmentsReplied(phone).catch((err) => console.error("markEnrollmentsReplied failed:", err));
+
+  if (msg.type === "text" || msg.type === "button") {
     // Best-effort: an AI/WhatsApp-send failure here must not mark this inbound message
     // (already safely stored above) as a failed webhook event.
     try {

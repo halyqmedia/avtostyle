@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CreateTemplateDialog } from "@/components/campaigns/create-template-dialog";
 import { SyncTemplateButton } from "@/components/campaigns/sync-template-button";
 import { ContactsBoard } from "@/components/campaigns/contacts-board";
+import { CreateSequenceDialog } from "@/components/campaigns/create-sequence-dialog";
 
 const TEMPLATE_STATUS_LABEL: Record<string, string> = {
   PENDING: "Тексерілуде",
@@ -25,6 +26,12 @@ const CAMPAIGN_STATUS_LABEL: Record<string, string> = {
   FAILED: "Қате",
 };
 
+const SEQUENCE_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Дайын тұр",
+  ACTIVE: "Белсенді",
+  PAUSED: "Тоқтатылды",
+};
+
 function distinct(values: (string | null)[]): string[] {
   return [...new Set(values.filter((v): v is string => !!v))].sort();
 }
@@ -32,13 +39,17 @@ function distinct(values: (string | null)[]): string[] {
 export default async function CampaignsPage() {
   await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
 
-  const [templates, campaigns, contacts] = await Promise.all([
+  const [templates, campaigns, contacts, sequences] = await Promise.all([
     prisma.whatsAppTemplate.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.campaign.findMany({ include: { template: true }, orderBy: { createdAt: "desc" } }),
     prisma.contact.findMany({
       orderBy: { createdAt: "desc" },
       take: 5000,
       include: { client: { include: { deals: { orderBy: { createdAt: "desc" }, take: 1 } } } },
+    }),
+    prisma.sequence.findMany({
+      include: { steps: true, _count: { select: { enrollments: true } } },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -121,7 +132,49 @@ export default async function CampaignsPage() {
             statuses={distinct(contacts.map((c) => c.status))}
             tags={distinct(contacts.flatMap((c) => c.tags))}
             templates={approvedTemplates.map((t) => ({ id: t.id, name: t.name, bodyText: t.bodyText }))}
+            sequences={sequences.map((s) => ({ id: s.id, name: s.name, stepCount: s.steps.length }))}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="text-base">Автоматты тізбектер</CardTitle>
+          <CreateSequenceDialog templates={approvedTemplates.map((t) => ({ id: t.id, name: t.name, bodyText: t.bodyText }))} />
+        </CardHeader>
+        <CardContent>
+          {sequences.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Әзірге тізбек жасалмаған.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Аты</TableHead>
+                  <TableHead>Қадам саны</TableHead>
+                  <TableHead>Статус</TableHead>
+                  <TableHead>Қосылған клиент</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sequences.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-medium">
+                      <Link href={`/campaigns/sequences/${s.id}`} className="hover:underline">
+                        {s.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{s.steps.length}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.status === "ACTIVE" ? "default" : "secondary"}>
+                        {SEQUENCE_STATUS_LABEL[s.status] ?? s.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{s._count.enrollments}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

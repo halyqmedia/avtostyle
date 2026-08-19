@@ -4,15 +4,9 @@ import { sendWhatsAppTemplate, uploadWhatsAppMedia, toWhatsAppRecipient } from "
 import { findOrCreateLeadForPhone } from "@/lib/lead-intake";
 import { normalizePhone } from "@/lib/phone";
 import { downloadMedia } from "@/lib/media-storage";
+import { hasReachedDailyTemplateCap, DAILY_TEMPLATE_SEND_CAP } from "@/lib/template-send-throttle";
 
 const SEND_GAP_MS = 1500; // pacing between sends — avoid tripping Meta's per-WABA rate/quality limits
-const DAILY_CAP = 200; // conservative default across ALL campaigns combined; raise once the WABA's quality rating is proven over time
-
-async function todaysCampaignSendCount(): Promise<number> {
-  const since = new Date();
-  since.setHours(0, 0, 0, 0);
-  return prisma.campaignRecipient.count({ where: { sentAt: { gte: since } } });
-}
 
 /**
  * Paced background broadcast loop — runs to completion in this process (a persistent Railway
@@ -57,10 +51,13 @@ export async function runCampaignSend(campaignId: string): Promise<void> {
   let failed = campaign.failedCount;
 
   for (const recipient of recipients) {
-    if ((await todaysCampaignSendCount()) >= DAILY_CAP) {
+    if (await hasReachedDailyTemplateCap()) {
       await prisma.campaignRecipient.update({
         where: { id: recipient.id },
-        data: { status: "FAILED", errorMessage: `Рассылканың күндік лимитіне жетті (${DAILY_CAP}) — ертең жалғасады` },
+        data: {
+          status: "FAILED",
+          errorMessage: `Рассылканың күндік лимитіне жетті (${DAILY_TEMPLATE_SEND_CAP}) — ертең жалғасады`,
+        },
       });
       failed++;
       await prisma.campaign.update({ where: { id: campaignId }, data: { sentCount: sent, failedCount: failed } });

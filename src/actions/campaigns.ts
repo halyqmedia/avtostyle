@@ -27,10 +27,17 @@ export async function createTemplate(_prev: FormState, formData: FormData): Prom
   const category = String(formData.get("category") ?? "MARKETING") as "MARKETING" | "UTILITY";
   const bodyText = String(formData.get("bodyText") ?? "").trim();
   const example = String(formData.get("example") ?? "").trim();
+  const footerText = String(formData.get("footerText") ?? "").trim();
+  const buttons = String(formData.get("buttons") ?? "")
+    .split(",")
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .slice(0, 3);
   const headerFile = formData.get("headerFile");
 
   if (!name) return { error: "Шаблон атын енгізіңіз" };
   if (!bodyText) return { error: "Шаблон мәтінін енгізіңіз" };
+  if (buttons.some((b) => b.length > 25)) return { error: "Түйме мәтіні 25 таңбадан аспауы керек" };
 
   const variables = extractTemplateVariables(bodyText);
   const variableCount = new Set(variables).size;
@@ -74,6 +81,8 @@ export async function createTemplate(_prev: FormState, formData: FormData): Prom
       bodyText,
       examples: variableCount === 1 ? [example] : [],
       header: headerType && headerHandle ? { format: headerType, handle: headerHandle } : undefined,
+      footerText: footerText || undefined,
+      buttons: buttons.length > 0 ? buttons : undefined,
     });
 
     await prisma.whatsAppTemplate.create({
@@ -87,6 +96,8 @@ export async function createTemplate(_prev: FormState, formData: FormData): Prom
         headerMediaKey,
         headerMimeType,
         headerFileName,
+        footerText: footerText || null,
+        buttons,
         metaTemplateId,
         status,
         createdById: session.user.id,

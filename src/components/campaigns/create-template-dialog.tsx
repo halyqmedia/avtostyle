@@ -105,6 +105,14 @@ export function CreateTemplateDialog() {
               <Input id="example" name="example" placeholder="Айгерім" required />
             </div>
           )}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="footerText">Аяқтауыш жол (міндетті емес)</Label>
+            <Input id="footerText" name="footerText" placeholder="Жазылымнан бас тарту үшін «Стоп» деп жазыңыз" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="buttons">Жылдам жауап түймелері (үтірмен, ≤25 таңба, ең көбі 3)</Label>
+            <Input id="buttons" name="buttons" placeholder="Иә, жіберіңіз, Қызық емес" />
+          </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="submit" disabled={pending}>
