@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CreateTemplateDialog } from "@/components/campaigns/create-template-dialog";
 import { SyncTemplateButton } from "@/components/campaigns/sync-template-button";
@@ -179,8 +180,11 @@ export default async function CampaignsPage() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base">Рассылкалар</CardTitle>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/campaigns/analytics">Воронка аналитикасы</Link>
+          </Button>
         </CardHeader>
         <CardContent>
           {campaigns.length === 0 ? (
