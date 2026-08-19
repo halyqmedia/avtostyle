@@ -6,9 +6,9 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CreateTemplateDialog } from "@/components/admin/create-template-dialog";
-import { SyncTemplateButton } from "@/components/admin/sync-template-button";
-import { CreateCampaignDialog } from "@/components/admin/create-campaign-dialog";
+import { CreateTemplateDialog } from "@/components/campaigns/create-template-dialog";
+import { SyncTemplateButton } from "@/components/campaigns/sync-template-button";
+import { ContactsBoard } from "@/components/campaigns/contacts-board";
 
 const TEMPLATE_STATUS_LABEL: Record<string, string> = {
   PENDING: "Тексерілуде",
@@ -25,12 +25,21 @@ const CAMPAIGN_STATUS_LABEL: Record<string, string> = {
   FAILED: "Қате",
 };
 
+function distinct(values: (string | null)[]): string[] {
+  return [...new Set(values.filter((v): v is string => !!v))].sort();
+}
+
 export default async function CampaignsPage() {
   await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
 
-  const [templates, campaigns] = await Promise.all([
+  const [templates, campaigns, contacts] = await Promise.all([
     prisma.whatsAppTemplate.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.campaign.findMany({ include: { template: true }, orderBy: { createdAt: "desc" } }),
+    prisma.contact.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 5000,
+      include: { client: { include: { deals: { orderBy: { createdAt: "desc" }, take: 1 } } } },
+    }),
   ]);
 
   const approvedTemplates = templates.filter((t) => t.status === "APPROVED");
@@ -89,9 +98,36 @@ export default async function CampaignsPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader>
+          <CardTitle className="text-base">Клиенттер базасы</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ContactsBoard
+            contacts={contacts.map((c) => ({
+              id: c.id,
+              phone: c.phone,
+              fullName: c.fullName,
+              city: c.city,
+              profession: c.profession,
+              category: c.category,
+              status: c.status,
+              tags: c.tags,
+              notes: c.notes,
+              dealId: c.client?.deals[0]?.id ?? null,
+            }))}
+            cities={distinct(contacts.map((c) => c.city))}
+            professions={distinct(contacts.map((c) => c.profession))}
+            categories={distinct(contacts.map((c) => c.category))}
+            statuses={distinct(contacts.map((c) => c.status))}
+            tags={distinct(contacts.flatMap((c) => c.tags))}
+            templates={approvedTemplates.map((t) => ({ id: t.id, name: t.name, bodyText: t.bodyText }))}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Рассылкалар</CardTitle>
-          <CreateCampaignDialog templates={approvedTemplates.map((t) => ({ id: t.id, name: t.name, bodyText: t.bodyText }))} />
         </CardHeader>
         <CardContent>
           {campaigns.length === 0 ? (
@@ -111,7 +147,7 @@ export default async function CampaignsPage() {
                 {campaigns.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">
-                      <Link href={`/admin/campaigns/${c.id}`} className="hover:underline">
+                      <Link href={`/campaigns/${c.id}`} className="hover:underline">
                         {c.name}
                       </Link>
                     </TableCell>

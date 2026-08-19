@@ -8,8 +8,8 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { SendCampaignButton } from "@/components/admin/send-campaign-button";
-import { CampaignAutoRefresh } from "@/components/admin/campaign-auto-refresh";
+import { SendCampaignButton } from "@/components/campaigns/send-campaign-button";
+import { CampaignAutoRefresh } from "@/components/campaigns/campaign-auto-refresh";
 
 const RECIPIENT_STATUS_LABEL: Record<string, string> = {
   PENDING: "Кезекте",
@@ -27,7 +27,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     where: { id },
     include: {
       template: true,
-      recipients: { orderBy: { createdAt: "asc" }, take: 500 },
+      recipients: { include: { contact: true }, orderBy: { createdAt: "asc" }, take: 500 },
     },
   });
   if (!campaign) notFound();
@@ -37,7 +37,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       <CampaignAutoRefresh active={campaign.status === "SENDING"} />
       <div>
         <Link
-          href="/admin/campaigns"
+          href="/campaigns"
           className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
@@ -98,13 +98,13 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                   <TableCell>
                     {r.dealId ? (
                       <Link href={`/crm/deals/${r.dealId}`} className="hover:underline">
-                        {r.phone}
+                        {r.contact.phone}
                       </Link>
                     ) : (
-                      r.phone
+                      r.contact.phone
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{r.fullName ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.contact.fullName ?? "—"}</TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-0.5">
                       <Badge variant={r.status === "FAILED" ? "destructive" : "secondary"}>

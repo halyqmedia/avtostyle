@@ -24,7 +24,7 @@ const NAV_ITEMS = [
   { href: "/finance", label: "Қаржы", icon: Wallet, permission: PERMISSIONS.FINANCE_ACCESS },
   { href: "/warehouse", label: "Склад", icon: Warehouse, permission: PERMISSIONS.WAREHOUSE_ACCESS },
   { href: "/settings/whatsapp", label: "Менің WhatsApp-ым", icon: MessageCircle, permission: null },
-  { href: "/admin/campaigns", label: "Рассылка", icon: Megaphone, permission: PERMISSIONS.CAMPAIGNS_MANAGE },
+  { href: "/campaigns", label: "Рассылка", icon: Megaphone, permission: PERMISSIONS.CAMPAIGNS_MANAGE },
   { href: "/admin", label: "Әкімшілік", icon: ShieldCheck, permission: PERMISSIONS.ADMIN_ACCESS },
 ] as const;
 

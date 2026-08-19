@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createCampaign } from "@/actions/campaigns";
+import { uploadContacts } from "@/actions/contacts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,18 +13,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export type ApprovedTemplateOption = { id: string; name: string; bodyText: string };
-
-export function CreateCampaignDialog({ templates }: { templates: ApprovedTemplateOption[] }) {
+export function UploadContactsDialog() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [pending, startTransition] = useTransition();
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const result = await createCampaign(undefined, formData);
+      const result = await uploadContacts(undefined, formData);
       if (result?.error) {
         setError(result.error);
       } else {
@@ -43,50 +40,35 @@ export function CreateCampaignDialog({ templates }: { templates: ApprovedTemplat
       }}
     >
       <DialogTrigger asChild>
-        <Button disabled={templates.length === 0}>+ Жаңа рассылка</Button>
+        <Button>+ База жүктеу</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Жаңа рассылка</DialogTitle>
+          <DialogTitle>Клиенттер базасын жүктеу</DialogTitle>
         </DialogHeader>
         <form action={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Рассылка аты</Label>
-            <Input id="name" name="name" placeholder="Күзгі акция — тамыз" required />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="templateId">Шаблон</Label>
-            <Select name="templateId" required>
-              <SelectTrigger id="templateId" className="w-full">
-                <SelectValue placeholder="Бекітілген шаблонды таңдаңыз" />
-              </SelectTrigger>
-              <SelectContent>
-                {templates.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="contactsFile">База файлы (.csv/.txt: телефон[, аты])</Label>
+            <Label htmlFor="contactsFile">Файл (.csv/.txt)</Label>
             <Input id="contactsFile" name="contactsFile" type="file" accept=".csv,.txt" />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="contactsText">Немесе тікелей қойыңыз (әр жолда: телефон, аты)</Label>
+            <Label htmlFor="contactsText">Немесе тікелей қойыңыз</Label>
             <textarea
               id="contactsText"
               name="contactsText"
-              rows={5}
-              placeholder={"+77011234567, Айгерім\n+77021234567, Дәулет"}
+              rows={6}
+              placeholder={"+77011234567, Айгерім, Алматы, дизайнер, VIP, Жаңа, тег1|тег2\n+77021234567, Дәулет"}
               className="w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
+            <p className="text-xs text-muted-foreground">
+              Әр жолда: телефон, аты, қала, кәсіп, бағыт, статус, тег(лер, &quot;|&quot; арқылы) — соңғы бағандар міндетті емес.
+              Бұрыннан бар нөмір қайта жүктелсе, деректері жаңарады.
+            </p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="submit" disabled={pending}>
-              {pending ? "Жүктелуде..." : "Базаны жүктеу"}
+              {pending ? "Жүктелуде..." : "Жүктеу"}
             </Button>
           </DialogFooter>
         </form>

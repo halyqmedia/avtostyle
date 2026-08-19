@@ -49,6 +49,7 @@ export async function runCampaignSend(campaignId: string): Promise<void> {
 
   const recipients = await prisma.campaignRecipient.findMany({
     where: { campaignId, status: "PENDING" },
+    include: { contact: true },
     orderBy: { createdAt: "asc" },
   });
 
@@ -67,22 +68,25 @@ export async function runCampaignSend(campaignId: string): Promise<void> {
     }
 
     try {
-      const phone = normalizePhone(recipient.phone) ?? recipient.phone;
+      const phone = normalizePhone(recipient.contact.phone) ?? recipient.contact.phone;
       const digits = phone.replace(/\D/g, "");
       const to = toWhatsAppRecipient(digits, phone);
       if (!to) throw new Error("Телефон нөмірі жарамсыз");
 
-      const { dealId } = await findOrCreateLeadForPhone({
+      const { clientId, dealId } = await findOrCreateLeadForPhone({
         phone,
         whatsappDigits: digits,
-        fallbackName: recipient.fullName ?? undefined,
+        fallbackName: recipient.contact.fullName ?? undefined,
         source: "campaign",
         createdById: campaign.createdById,
-        dealTitle: recipient.fullName || phone,
+        dealTitle: recipient.contact.fullName || phone,
         dealComment: `Рассылка: ${campaign.name}`,
       });
+      // Link the audience Contact to the sales Client/Deal it resolved to, so the contacts board
+      // can jump straight to the conversation once someone engages with a campaign.
+      await prisma.contact.update({ where: { id: recipient.contactId }, data: { clientId } }).catch(() => {});
 
-      const bodyParams = campaign.template.variableCount > 0 ? [recipient.fullName || phone] : [];
+      const bodyParams = campaign.template.variableCount > 0 ? [recipient.contact.fullName || phone] : [];
       const header =
         campaign.template.headerType && headerMetaMediaId
           ? {

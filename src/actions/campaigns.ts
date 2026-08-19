@@ -1,11 +1,10 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
-import { randomUUID } from "node:crypto";
-import { normalizePhone } from "@/lib/phone";
 import {
   createMetaTemplate,
   fetchMetaTemplateStatus,
@@ -97,7 +96,7 @@ export async function createTemplate(_prev: FormState, formData: FormData): Prom
     return { error: err instanceof Error ? err.message : "Шаблон құрылмады" };
   }
 
-  revalidatePath("/admin/campaigns");
+  revalidatePath("/campaigns");
   return undefined;
 }
 
@@ -108,70 +107,40 @@ export async function syncTemplateStatus(templateId: string): Promise<void> {
 
   const { status, rejectedReason } = await fetchMetaTemplateStatus(template.metaTemplateId);
   await prisma.whatsAppTemplate.update({ where: { id: templateId }, data: { status, rejectedReason } });
-  revalidatePath("/admin/campaigns");
+  revalidatePath("/campaigns");
 }
 
-type ParsedContact = { phone: string; fullName: string | null };
-
-function parseContactsFile(text: string): { contacts: ParsedContact[]; skipped: number } {
-  const contacts: ParsedContact[] = [];
-  const seen = new Set<string>();
-  let skipped = 0;
-
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-
-    const parts = line.split(/[,;\t]/).map((p) => p.trim());
-    const phone = normalizePhone(parts[0] ?? "");
-    if (!phone) {
-      skipped++;
-      continue;
-    }
-    if (seen.has(phone)) continue;
-    seen.add(phone);
-    contacts.push({ phone, fullName: parts[1] || null });
-  }
-
-  return { contacts, skipped };
-}
-
+/** Creates a broadcast from an already-selected set of Contact rows (filtered/picked on the Contacts board). */
 export async function createCampaign(_prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
 
   const name = String(formData.get("name") ?? "").trim();
   const templateId = String(formData.get("templateId") ?? "");
-  const pastedContacts = String(formData.get("contactsText") ?? "");
-  const file = formData.get("contactsFile");
+  const contactIds = String(formData.get("contactIds") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   if (!name) return { error: "Рассылка атын енгізіңіз" };
   const template = await prisma.whatsAppTemplate.findUnique({ where: { id: templateId } });
   if (!template) return { error: "Шаблонды таңдаңыз" };
   if (template.status !== "APPROVED") return { error: "Шаблон әлі Meta-дан бекітілмеген" };
-
-  let rawText = pastedContacts;
-  if (file instanceof File && file.size > 0) {
-    rawText += "\n" + (await file.text());
-  }
-  if (!rawText.trim()) return { error: "Клиенттер базасын жүктеңіз немесе қойыңыз" };
-
-  const { contacts, skipped } = parseContactsFile(rawText);
-  if (contacts.length === 0) return { error: "Жарамды телефон нөмірі табылмады" };
+  if (contactIds.length === 0) return { error: "Кемінде бір клиентті таңдаңыз" };
 
   await prisma.campaign.create({
     data: {
       name,
       templateId,
-      totalCount: contacts.length,
+      totalCount: contactIds.length,
       createdById: session.user.id,
       recipients: {
-        createMany: { data: contacts.map((c) => ({ phone: c.phone, fullName: c.fullName })) },
+        createMany: { data: contactIds.map((contactId) => ({ contactId })) },
       },
     },
   });
 
-  revalidatePath("/admin/campaigns");
-  return skipped > 0 ? { error: `Жасалды, бірақ ${skipped} жол дұрыс емес нөмір болғандықтан өткізілді` } : undefined;
+  revalidatePath("/campaigns");
+  return undefined;
 }
 
 export async function sendCampaign(campaignId: string): Promise<void> {
@@ -186,6 +155,6 @@ export async function sendCampaign(campaignId: string): Promise<void> {
   // Baileys sessions), so the paced send loop keeps running in the background.
   runCampaignSend(campaignId).catch((err) => console.error("Campaign send failed:", campaignId, err));
 
-  revalidatePath(`/admin/campaigns/${campaignId}`);
-  revalidatePath("/admin/campaigns");
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/campaigns");
 }

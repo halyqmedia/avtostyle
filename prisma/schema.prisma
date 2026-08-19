@@ -35,6 +35,7 @@ model User {
   whatsappSession    WhatsAppSession?
   whatsappTemplates  WhatsAppTemplate[]
   campaigns          Campaign[]
+  contacts           Contact[]
 
   @@map("users")
 }
@@ -105,8 +106,34 @@ model Client {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   deals      Deal[]
+  contact    Contact?
 
   @@map("clients")
+}
+
+/// A broadcast-audience contact — separate from Client/Deal on purpose: uploading a base of
+/// numbers here does not create sales leads or clutter the CRM board. `client` is filled in only
+/// once this person actually replies to a campaign and findOrCreateLeadForPhone creates a real lead.
+model Contact {
+  id          String   @id @default(cuid())
+  phone       String   @unique
+  fullName    String?
+  city        String?
+  profession  String?
+  category    String? // "бағыты" — free-form audience segment
+  status      String?  @default("Жаңа")
+  tags        String[] @default([])
+  notes       String?
+  clientId    String?  @unique
+  client      Client?  @relation(fields: [clientId], references: [id])
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaignRecipients CampaignRecipient[]
+
+  @@map("contacts")
 }
 
 model Product {
@@ -542,14 +569,14 @@ model Campaign {
   @@map("campaigns")
 }
 
-/// One uploaded contact within a Campaign — tracks its own send/delivery status independent of
+/// One targeted Contact within a Campaign — tracks its own send/delivery status independent of
 /// the others, since a bulk send runs as a paced background loop that can take a while.
 model CampaignRecipient {
   id                String    @id @default(cuid())
   campaignId        String
   campaign          Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  phone             String
-  fullName          String?
+  contactId         String
+  contact           Contact   @relation(fields: [contactId], references: [id])
   status            String    @default("PENDING") // PENDING | SENT | DELIVERED | READ | FAILED
   errorMessage      String?
   dealId            String? // the Client/Deal this recipient resolved to — replies land there, AI agent takes over
@@ -558,6 +585,7 @@ model CampaignRecipient {
   createdAt         DateTime  @default(now())
 
   @@index([campaignId])
+  @@index([contactId])
   @@index([whatsappMessageId])
   @@map("campaign_recipients")
 }
