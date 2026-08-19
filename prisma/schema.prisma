@@ -428,6 +428,10 @@ model AiSettings {
   model              String   @default("gemini-3.5-flash-lite")
   maxHistoryMessages Int      @default(10) // chat turns sent as context — keeps prompts (and cost) small
   maxOutputTokens    Int      @default(300)
+  kpMediaKeyKk       String? // bucket key — commercial offer (КП) PDF the agent attaches when a Kazakh-speaking client asks for it
+  kpMediaKeyRu       String? // same, Russian-language file
+  catalogMediaKeyKk  String? // bucket key — product catalog PDF, Kazakh
+  catalogMediaKeyRu  String? // same, Russian
   updatedAt          DateTime @updatedAt
   updatedById        String?
   updatedBy          User?    @relation(fields: [updatedById], references: [id])

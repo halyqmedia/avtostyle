@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { getOrCreateAiSettings } from "@/actions/ai-settings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiSettingsForm } from "@/components/admin/ai-settings-form";
+import { AiDocumentsForm } from "@/components/admin/ai-documents-form";
 
 function startOfMonth() {
   const now = new Date();
@@ -83,6 +84,20 @@ export default async function AiAgentPage() {
               maxHistoryMessages: settings.maxHistoryMessages,
               maxOutputTokens: settings.maxOutputTokens,
             }}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">КП мен каталог файлдары</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AiDocumentsForm
+            hasKpKk={Boolean(settings.kpMediaKeyKk)}
+            hasKpRu={Boolean(settings.kpMediaKeyRu)}
+            hasCatalogKk={Boolean(settings.catalogMediaKeyKk)}
+            hasCatalogRu={Boolean(settings.catalogMediaKeyRu)}
           />
         </CardContent>
       </Card>

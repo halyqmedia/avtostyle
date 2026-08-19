@@ -48,10 +48,6 @@ export function AiSettingsForm({
           rows={12}
           className="w-full resize-y rounded-md border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
-        <p className="text-xs text-muted-foreground">
-          Тауар каталогы (атауы мен бағасы) әр хабарламаға автоматты қосылады — оны бұл жерге қайта
-          жазудың қажеті жоқ.
-        </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">

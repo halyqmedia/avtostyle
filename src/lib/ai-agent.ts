@@ -1,7 +1,77 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { sendWhatsAppMessage, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
+import { sendWhatsAppMessage, sendWhatsAppMedia, uploadWhatsAppMedia, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
+import { downloadMedia } from "@/lib/media-storage";
 import { callGemini } from "@/lib/gemini";
+
+type RawReply = {
+  reply?: string;
+  sendDocument?: string | null;
+  language?: string;
+};
+
+const DOCUMENT_FORMAT_INSTRUCTIONS = `
+
+Жауапты МІНДЕТТІ түрде тек мына өрістері бар JSON объект түрінде қайтар, басқа мәтін жазба:
+{"reply": "клиентке жіберілетін хабарлама мәтіні (жоғарыдағы ережелерге сай, WhatsApp-қа сай қысқа)", "sendDocument": "KP" | "CATALOG" | null, "language": "KK" | "RU"}
+
+sendDocument ережелері:
+- Клиент коммерциялық ұсыныс/КП/баға парағы/шарттар туралы толық құжат сұраса — "KP".
+- Клиент каталог/тауар тізімі/фото/модельдер тізімі туралы сұраса — "CATALOG".
+- Басқа жағдайда — null.
+- Бір сөйлесуде бұрын жіберілген құжатты клиент нақты қайта сұрамаса, қайта-қайта жібермеу.
+language: осы жауап қай тілде жазылғанын көрсет ("KK" — қазақша, "RU" — орысша) — файл сол тілде таңдалады.`;
+
+async function sendAiDocument(
+  dealId: string,
+  recipient: string,
+  kind: "KP" | "CATALOG",
+  language: "KK" | "RU",
+): Promise<void> {
+  const settings = await prisma.aiSettings.findUnique({ where: { id: "default" } });
+  if (!settings) return;
+
+  const mediaKey =
+    kind === "KP"
+      ? language === "RU"
+        ? settings.kpMediaKeyRu
+        : settings.kpMediaKeyKk
+      : language === "RU"
+        ? settings.catalogMediaKeyRu
+        : settings.catalogMediaKeyKk;
+  if (!mediaKey) return; // admin hasn't uploaded this file yet — skip quietly, text reply already sent
+
+  const fileName =
+    kind === "KP"
+      ? language === "RU"
+        ? "AVTOSTYLE_KP.pdf"
+        : "AVTOSTYLE_KP_kaz.pdf"
+      : language === "RU"
+        ? "AVTOSTYLE_katalog.pdf"
+        : "AVTOSTYLE_katalog_kaz.pdf";
+
+  try {
+    const buffer = await downloadMedia(mediaKey);
+    const mediaId = await uploadWhatsAppMedia(buffer, "application/pdf");
+    const { idMessage } = await sendWhatsAppMedia(recipient, "document", mediaId, { filename: fileName });
+
+    await prisma.whatsAppMessage.create({
+      data: {
+        dealId,
+        direction: "OUT",
+        body: "",
+        messageType: "document",
+        mediaUrl: mediaKey,
+        mediaMimeType: "application/pdf",
+        fileName,
+        whatsappMessageId: idMessage,
+        aiGenerated: true,
+      },
+    });
+  } catch (err) {
+    console.error("AI document send failed:", dealId, kind, language, err);
+  }
+}
 
 /**
  * Runs after a new inbound WhatsApp message is stored. Generates and sends a reply via
@@ -34,7 +104,12 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
   // No product-catalog injection here on purpose: the agent's offer (dealer program, pricing
   // tiers, terms) lives entirely in settings.systemPrompt now — the old per-unit retail Product
   // table is B2C EVA/3D pricing, unrelated to (and actively confusable with) that offer.
-  const systemPrompt = [settings.systemPrompt, "", `Клиенттің аты: ${deal.client.fullName}.`].join("\n");
+  const systemPrompt = [
+    settings.systemPrompt,
+    "",
+    `Клиенттің аты: ${deal.client.fullName}.`,
+    DOCUMENT_FORMAT_INSTRUCTIONS,
+  ].join("\n");
 
   const history = recentMessages.map((m) => ({
     role: (m.direction === "IN" ? "user" : "model") as "user" | "model",
@@ -45,24 +120,42 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
     model: settings.model,
     systemPrompt,
     history,
-    maxOutputTokens: settings.maxOutputTokens,
+    maxOutputTokens: settings.maxOutputTokens + 60, // JSON envelope overhead on top of the reply itself
+    jsonMode: true,
   });
   if (!reply.text) return;
+
+  let parsed: RawReply;
+  try {
+    parsed = JSON.parse(reply.text) as RawReply;
+  } catch {
+    // Model didn't follow the JSON envelope — fall back to treating the raw text as the reply
+    // rather than dropping it silently.
+    parsed = { reply: reply.text, sendDocument: null, language: "KK" };
+  }
+
+  const replyText = parsed.reply?.trim();
+  if (!replyText) return;
 
   const recipient = toWhatsAppRecipient(deal.client.whatsappId, deal.client.phone);
   if (!recipient) return;
 
-  const { idMessage } = await sendWhatsAppMessage(recipient, reply.text);
+  const { idMessage } = await sendWhatsAppMessage(recipient, replyText);
 
   await prisma.whatsAppMessage.create({
     data: {
       dealId,
       direction: "OUT",
-      body: reply.text,
+      body: replyText,
       whatsappMessageId: idMessage,
       aiGenerated: true,
       promptTokens: reply.promptTokens,
       completionTokens: reply.completionTokens,
     },
   });
+
+  if (parsed.sendDocument === "KP" || parsed.sendDocument === "CATALOG") {
+    const language = parsed.language === "RU" ? "RU" : "KK";
+    await sendAiDocument(dealId, recipient, parsed.sendDocument, language);
+  }
 }

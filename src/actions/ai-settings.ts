@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth-guard";
 import { assertDealAccess } from "@/lib/deal-access";
 import { PERMISSIONS } from "@/lib/permissions";
+import { uploadMedia } from "@/lib/media-storage";
 
 // Seed default for a fresh install only — the live prompt actually driving the agent is
 // whatever's stored in the ai_settings row, edited from /admin/ai-agent (or by an operator
@@ -57,4 +58,35 @@ export async function toggleDealAi(dealId: string, aiEnabled: boolean) {
   await assertDealAccess(dealId);
   await prisma.deal.update({ where: { id: dealId }, data: { aiEnabled } });
   revalidatePath(`/crm/deals/${dealId}`);
+}
+
+const DOCUMENT_FIELD: Record<string, "kpMediaKeyKk" | "kpMediaKeyRu" | "catalogMediaKeyKk" | "catalogMediaKeyRu"> = {
+  "kp-kk": "kpMediaKeyKk",
+  "kp-ru": "kpMediaKeyRu",
+  "catalog-kk": "catalogMediaKeyKk",
+  "catalog-ru": "catalogMediaKeyRu",
+};
+
+/** Uploads the KP/catalog PDF the AI agent attaches when a client asks for one — one of 4 slots (doc × language). */
+export async function uploadAiDocument(slot: string, formData: FormData): Promise<void> {
+  await requirePermission(PERMISSIONS.ADMIN_AI_MANAGE);
+
+  const field = DOCUMENT_FIELD[slot];
+  if (!field) throw new Error("Белгісіз файл слоты");
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("Файл таңдалмады");
+  if (file.type !== "application/pdf") throw new Error("Тек PDF файл жүктеуге болады");
+  if (file.size > 20 * 1024 * 1024) throw new Error("Файл тым үлкен (20MB-тан аспауы керек)");
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const key = await uploadMedia(`ai-agent/${slot}.pdf`, buffer, "application/pdf");
+
+  await prisma.aiSettings.upsert({
+    where: { id: "default" },
+    update: { [field]: key },
+    create: { id: "default", systemPrompt: DEFAULT_SYSTEM_PROMPT, [field]: key },
+  });
+
+  revalidatePath("/admin/ai-agent");
 }
