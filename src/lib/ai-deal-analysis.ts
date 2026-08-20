@@ -37,7 +37,7 @@ export async function analyzeDeal(dealId: string): Promise<void> {
   });
 
   const recentMessages = await prisma.whatsAppMessage.findMany({
-    where: { dealId, messageType: "text" },
+    where: { dealId, messageType: { in: ["text", "audio"] }, body: { not: "" } },
     orderBy: { createdAt: "desc" },
     take: settings.maxHistoryMessages,
   });

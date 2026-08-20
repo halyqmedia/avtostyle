@@ -90,7 +90,9 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
   if (!deal || !deal.aiEnabled || deal.pipelineStage.isFinal) return;
 
   const recentMessages = await prisma.whatsAppMessage.findMany({
-    where: { dealId, messageType: "text" },
+    // "audio" messages carry their Gemini-transcribed text in `body`, same as a typed message —
+    // included here so the agent can react to voice notes, not just text.
+    where: { dealId, messageType: { in: ["text", "audio"] }, body: { not: "" } },
     orderBy: { createdAt: "desc" },
     take: settings.maxHistoryMessages,
   });

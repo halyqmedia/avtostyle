@@ -5,6 +5,7 @@ import { downloadWhatsAppMedia } from "@/lib/whatsapp-cloud";
 import { uploadMedia } from "@/lib/media-storage";
 import { normalizePhone } from "@/lib/phone";
 import { maybeSendAiReply } from "@/lib/ai-agent";
+import { transcribeAudio } from "@/lib/gemini";
 import { analyzeDeal } from "@/lib/ai-deal-analysis";
 import { findOrCreateLeadForPhone } from "@/lib/lead-intake";
 import { markEnrollmentsReplied } from "@/lib/sequence-sender";
@@ -130,13 +131,32 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
 
   let mediaKey: string | undefined;
   let mediaMimeType: string | undefined;
+  let audioTranscript: string | undefined;
   if (media) {
     const { buffer, mimeType } = await downloadWhatsAppMedia(media.id);
     mediaKey = await uploadMedia(`whatsapp/in/${msg.id}`, buffer, mimeType);
     mediaMimeType = mimeType;
+
+    if (msg.type === "audio") {
+      try {
+        const settings = await prisma.aiSettings.findUnique({ where: { id: "default" } });
+        if (settings?.enabled) {
+          audioTranscript = await transcribeAudio({ model: settings.model, audioBuffer: buffer, mimeType });
+        }
+      } catch (err) {
+        console.error("Audio transcription failed:", msg.id, err);
+      }
+    }
   }
 
-  const text = msg.type === "text" ? msg.text?.body : msg.type === "button" ? msg.button?.text : media?.caption;
+  const text =
+    msg.type === "text"
+      ? msg.text?.body
+      : msg.type === "button"
+        ? msg.button?.text
+        : msg.type === "audio"
+          ? audioTranscript || media?.caption
+          : media?.caption;
 
   const systemUser = await prisma.user.findFirst({ where: { role: { key: "ADMIN" } } });
   if (!systemUser) return undefined;
@@ -173,7 +193,7 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
   // contact; the whole point of a sequence is to back off once the person actually responds.
   await markEnrollmentsReplied(phone).catch((err) => console.error("markEnrollmentsReplied failed:", err));
 
-  if (msg.type === "text" || msg.type === "button") {
+  if (msg.type === "text" || msg.type === "button" || (msg.type === "audio" && audioTranscript)) {
     // Best-effort: an AI/WhatsApp-send failure here must not mark this inbound message
     // (already safely stored above) as a failed webhook event.
     try {

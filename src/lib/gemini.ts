@@ -65,6 +65,53 @@ export async function callGemini(args: {
   };
 }
 
+/**
+ * Transcribes a WhatsApp voice note using Gemini's native audio understanding — no separate
+ * speech-to-text service needed. Returns the spoken words as plain text (kazakh or russian,
+ * whichever was spoken), or "" if the model produced nothing usable.
+ */
+export async function transcribeAudio(args: { model: string; audioBuffer: Buffer; mimeType: string }): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Gemini API кілті бапталмаған (GEMINI_API_KEY жоқ)");
+
+  // WhatsApp reports e.g. "audio/ogg; codecs=opus" — Gemini's inlineData.mimeType wants the bare
+  // media type without codec parameters.
+  const mimeType = args.mimeType.split(";")[0].trim();
+
+  const res = await fetch(`${GEMINI_API}/${args.model}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: args.audioBuffer.toString("base64") } },
+            {
+              text: "Бұл WhatsApp дауыстық хабарламасы. Онда айтылған сөздерді дәл сол тілде (қазақша немесе орысша, қалай айтылса солай) мәтінге түрлендір. Тек айтылған сөздерді жаз, түсініктеме, тырнақша немесе басқа ешнәрсе қоспа.",
+            },
+          ],
+        },
+      ],
+      generationConfig: { maxOutputTokens: 500, temperature: 0.1 },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Gemini дауыс тану қатесі (${res.status}): ${errText.slice(0, 300)}`);
+  }
+
+  const data = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+
+  return (data.candidates?.[0]?.content?.parts ?? [])
+    .map((p) => p.text ?? "")
+    .join("")
+    .trim();
+}
+
 const CACHE_TTL_SECONDS = 3600;
 const CACHE_FAILURE_RETRY_MS = 10 * 60 * 1000;
 
