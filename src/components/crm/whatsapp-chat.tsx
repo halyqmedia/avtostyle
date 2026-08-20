@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { format, isSameDay, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
 import { sendDealWhatsAppMessage, sendDealWhatsAppFile } from "@/actions/whatsapp";
@@ -47,11 +48,26 @@ export function WhatsAppChat({
 }) {
   const [pending, startTransition] = useTransition();
   const listRef = useRef<HTMLDivElement>(null);
+  const prevCountRef = useRef(0);
+  const router = useRouter();
 
   useEffect(() => {
+    // Only auto-scroll when a message was actually added — otherwise the 5s poll below would
+    // yank the view back to the bottom every time it refetches, even while someone's scrolled
+    // up reading older history.
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && messages.length > prevCountRef.current) el.scrollTop = el.scrollHeight;
+    prevCountRef.current = messages.length;
   }, [messages]);
+
+  // Client can reply any time; without this, a new inbound message just sits in the DB until
+  // someone manually reloads the page. Skips while the tab is hidden to avoid needless refetches.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [router]);
 
   function sendText(text: string) {
     startTransition(async () => {
