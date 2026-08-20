@@ -12,6 +12,7 @@ import { AIInsights } from "@/components/crm/ai-insights";
 import { getMediaUrl } from "@/lib/media-storage";
 import { CreateProductionOrderDialog } from "@/components/crm/create-production-order-dialog";
 import { DealAiToggle } from "@/components/crm/deal-ai-toggle";
+import { WhatsAppWindowBadge } from "@/components/whatsapp-window-badge";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
@@ -100,6 +101,9 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   const prepayment = Number(deal.prepayment);
   const channel = whatsappMessages[whatsappMessages.length - 1]?.channel ?? "CLOUD_API";
   const channelLabel = channel === "PERSONAL" ? "Жеке WhatsApp арқылы" : "WABA (ортақ нөмір)";
+  const lastInbound = [...whatsappMessages].reverse().find((m) => m.direction === "IN");
+  const lastInboundAt =
+    (lastInbound?.createdAt ?? (deal.source === "whatsapp" ? deal.createdAt : null))?.toISOString() ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -151,9 +155,12 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       <div className="grid h-[calc(100dvh-390px)] min-h-[460px] gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-h-0 flex-col rounded-xl border">
           <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
-            <div>
-              <p className="text-sm font-semibold">WhatsApp</p>
-              <p className="text-xs text-muted-foreground">{channelLabel}</p>
+            <div className="flex items-center gap-2">
+              <WhatsAppWindowBadge lastInboundAt={lastInboundAt} />
+              <div>
+                <p className="text-sm font-semibold">WhatsApp</p>
+                <p className="text-xs text-muted-foreground">{channelLabel}</p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {canCreateProductionOrder && (

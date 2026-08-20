@@ -18,7 +18,12 @@ export default async function CrmPage() {
     prisma.pipelineStage.findMany({ where: { pipeline: "SALES" }, orderBy: { order: "asc" } }),
     prisma.deal.findMany({
       where: canViewAll ? {} : { assignedToId: session.user.id },
-      include: { client: true, product: true, assignedTo: true },
+      include: {
+        client: true,
+        product: true,
+        assignedTo: true,
+        whatsappMessages: { where: { direction: "IN" }, orderBy: { createdAt: "desc" }, take: 1 },
+      },
       orderBy: { updatedAt: "desc" },
     }),
     prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -38,6 +43,9 @@ export default async function CrmPage() {
     assigneeName: d.assignedTo?.name ?? null,
     source: d.source,
     aiTemperature: d.aiTemperature,
+    // Falls back to the deal's creation time for legacy whatsapp-sourced leads whose very first
+    // inbound message predates per-message logging — otherwise the badge would wrongly read "closed".
+    lastInboundAt: (d.whatsappMessages[0]?.createdAt ?? (d.source === "whatsapp" ? d.createdAt : null))?.toISOString() ?? null,
   }));
 
   const assignees = Array.from(
