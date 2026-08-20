@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessage, sendWhatsAppMedia, uploadWhatsAppMedia, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
 import { downloadMedia } from "@/lib/media-storage";
-import { callGemini } from "@/lib/gemini";
+import { callGemini, getOrCreateSystemCache, type ChatTurn } from "@/lib/gemini";
 
 type RawReply = {
   reply?: string;
@@ -104,21 +104,40 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
   // No product-catalog injection here on purpose: the agent's offer (dealer program, pricing
   // tiers, terms) lives entirely in settings.systemPrompt now — the old per-unit retail Product
   // table is B2C EVA/3D pricing, unrelated to (and actively confusable with) that offer.
-  const systemPrompt = [
-    settings.systemPrompt,
-    "",
-    `Клиенттің аты: ${deal.client.fullName}.`,
-    DOCUMENT_FORMAT_INSTRUCTIONS,
-  ].join("\n");
+  //
+  // This block (settings.systemPrompt + DOCUMENT_FORMAT_INSTRUCTIONS) is identical across every
+  // client's conversation and only changes when an admin edits it in /admin/ai-agent — the ideal
+  // shape for a Gemini context cache, since this is the highest-volume call site (runs on every
+  // inbound WhatsApp message). Per-client detail (the name) can't live in the cached text, so it
+  // rides along as a small priming turn in `contents` instead.
+  const cacheableSystemPrompt = [settings.systemPrompt, DOCUMENT_FORMAT_INSTRUCTIONS].join("\n");
+  const cachedContent = await getOrCreateSystemCache(settings.model, cacheableSystemPrompt);
 
-  const history = recentMessages.map((m) => ({
-    role: (m.direction === "IN" ? "user" : "model") as "user" | "model",
+  const conversationHistory: ChatTurn[] = recentMessages.map((m) => ({
+    role: m.direction === "IN" ? "user" : "model",
     text: m.body,
   }));
 
+  const history: ChatTurn[] = cachedContent
+    ? [
+        { role: "user", text: `[Контекст: клиенттің аты — ${deal.client.fullName}]` },
+        { role: "model", text: "Түсінікті." },
+        ...conversationHistory,
+      ]
+    : conversationHistory;
+
   const reply = await callGemini({
     model: settings.model,
-    systemPrompt,
+    ...(cachedContent
+      ? { cachedContent }
+      : {
+          systemPrompt: [
+            settings.systemPrompt,
+            "",
+            `Клиенттің аты: ${deal.client.fullName}.`,
+            DOCUMENT_FORMAT_INSTRUCTIONS,
+          ].join("\n"),
+        }),
     history,
     maxOutputTokens: settings.maxOutputTokens + 60, // JSON envelope overhead on top of the reply itself
     jsonMode: true,
