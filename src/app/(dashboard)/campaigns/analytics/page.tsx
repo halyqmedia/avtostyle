@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -81,13 +79,6 @@ export default async function CampaignsAnalyticsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link
-          href="/campaigns"
-          className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Артқа
-        </Link>
         <h1 className="text-xl font-semibold">Воронка аналитикасы</h1>
         <p className="text-sm text-muted-foreground">Жіберілді → жеткізілді → жауап берді → сатылды (сатылым — «sales_payment» транзакциясы бар сделка)</p>
       </div>

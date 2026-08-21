@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth-guard";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -34,13 +33,6 @@ export default async function ContactsQualityPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link
-          href="/campaigns"
-          className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Артқа
-        </Link>
         <h1 className="text-xl font-semibold">Клиенттер базасының сапасы</h1>
         <p className="text-sm text-muted-foreground">
           {contacts.length} контакттан анықталған мүмкін дубликат пен толтырылмаған өрістер
@@ -77,7 +69,7 @@ export default async function ContactsQualityPage() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1.5">
                         {group.map((c) => (
-                          <Link key={c.id} href={`/campaigns?search=${encodeURIComponent(c.phone)}`}>
+                          <Link key={c.id} href={`/campaigns/contacts?search=${encodeURIComponent(c.phone)}`}>
                             <Badge variant="outline" className="hover:bg-muted">
                               {c.phone}
                             </Badge>
