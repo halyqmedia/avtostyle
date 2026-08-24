@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DAILY_TEMPLATE_SEND_CAP } from "@/lib/campaign-limits";
 
 export type ApprovedTemplateOption = { id: string; name: string; bodyText: string };
 
@@ -72,6 +73,17 @@ export function CreateCampaignFromSelectionDialog({
               </SelectContent>
             </Select>
           </div>
+          {selectedIds.length > DAILY_TEMPLATE_SEND_CAP ? (
+            <p className="text-xs text-muted-foreground">
+              Күніне ең көбі {DAILY_TEMPLATE_SEND_CAP} хабарлама жіберіледі — {selectedIds.length} клиентке толық
+              жеткізу шамамен {Math.ceil(selectedIds.length / DAILY_TEMPLATE_SEND_CAP)} күнге созылады (лимитке
+              жеткен сайын автоматты түрде келесі күні жалғасады).
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {selectedIds.length} клиенттің бәрі бір күнде жіберіледі (күндік лимит: {DAILY_TEMPLATE_SEND_CAP}).
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="submit" disabled={pending || templates.length === 0}>

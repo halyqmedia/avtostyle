@@ -1,10 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { DAILY_TEMPLATE_SEND_CAP } from "@/lib/campaign-limits";
 
 // Campaigns and sequences both send template messages through the same WABA/phone number, so
 // they must share one daily budget against Meta's real per-account rate/quality limits — two
 // independent counters would silently double the actual cap.
-export const DAILY_TEMPLATE_SEND_CAP = 200;
+export { DAILY_TEMPLATE_SEND_CAP };
 
 export async function todaysTemplateSendCount(): Promise<number> {
   const since = new Date();
