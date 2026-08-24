@@ -4,9 +4,14 @@ import { sendWhatsAppTemplate, uploadWhatsAppMedia, toWhatsAppRecipient } from "
 import { findOrCreateLeadForPhone } from "@/lib/lead-intake";
 import { normalizePhone } from "@/lib/phone";
 import { downloadMedia } from "@/lib/media-storage";
-import { hasReachedDailyTemplateCap, DAILY_TEMPLATE_SEND_CAP } from "@/lib/template-send-throttle";
+import { hasReachedDailyTemplateCap } from "@/lib/template-send-throttle";
 
 const SEND_GAP_MS = 1500; // pacing between sends — avoid tripping Meta's per-WABA rate/quality limits
+
+// Guards against the same campaign being driven by two overlapping loops — the initial
+// `sendCampaign` call and a resume poll tick (see resumePausedCampaigns) could otherwise both
+// pick it up around the same moment.
+const runningCampaigns = new Set<string>();
 
 /**
  * Paced background broadcast loop — runs to completion in this process (a persistent Railway
@@ -16,8 +21,22 @@ const SEND_GAP_MS = 1500; // pacing between sends — avoid tripping Meta's per-
  * Always sends through the Cloud API (WABA) — never a manager's personal Baileys session. Bulk
  * template sends are exactly the kind of traffic pattern that gets a personal number banned;
  * only the shared, Meta-managed WABA number is meant to carry campaign/sequence volume.
+ *
+ * A run that hits the shared daily send cap stops partway through and leaves the rest of its
+ * recipients PENDING — see resumePausedCampaigns, polled from instrumentation.ts, which picks
+ * the campaign back up once the next day's quota opens up.
  */
 export async function runCampaignSend(campaignId: string): Promise<void> {
+  if (runningCampaigns.has(campaignId)) return;
+  runningCampaigns.add(campaignId);
+  try {
+    await runCampaignSendInner(campaignId);
+  } finally {
+    runningCampaigns.delete(campaignId);
+  }
+}
+
+async function runCampaignSendInner(campaignId: string): Promise<void> {
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, include: { template: true } });
   if (!campaign) return;
   if (campaign.template.status !== "APPROVED") {
@@ -25,7 +44,10 @@ export async function runCampaignSend(campaignId: string): Promise<void> {
     return;
   }
 
-  await prisma.campaign.update({ where: { id: campaignId }, data: { status: "SENDING", startedAt: new Date() } });
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: { status: "SENDING", startedAt: campaign.startedAt ?? new Date() },
+  });
 
   // The template's header file (if any) is uploaded to Meta once per campaign run and that same
   // media id is reused for every recipient — re-uploading per-message would be wasteful and slow.
@@ -55,18 +77,9 @@ export async function runCampaignSend(campaignId: string): Promise<void> {
   let failed = campaign.failedCount;
 
   for (const recipient of recipients) {
-    if (await hasReachedDailyTemplateCap()) {
-      await prisma.campaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
-          status: "FAILED",
-          errorMessage: `Рассылканың күндік лимитіне жетті (${DAILY_TEMPLATE_SEND_CAP}) — ертең жалғасады`,
-        },
-      });
-      failed++;
-      await prisma.campaign.update({ where: { id: campaignId }, data: { sentCount: sent, failedCount: failed } });
-      continue;
-    }
+    // Stop for today, leaving the rest PENDING — resumePausedCampaigns picks this campaign back
+    // up on a later poll tick once tomorrow's quota opens up (same pattern as sequence sends).
+    if (await hasReachedDailyTemplateCap()) break;
 
     try {
       const phone = normalizePhone(recipient.contact.phone) ?? recipient.contact.phone;
@@ -132,5 +145,24 @@ export async function runCampaignSend(campaignId: string): Promise<void> {
     await new Promise((r) => setTimeout(r, SEND_GAP_MS));
   }
 
-  await prisma.campaign.update({ where: { id: campaignId }, data: { status: "COMPLETED", completedAt: new Date() } });
+  // If the cap cut the loop short, PENDING recipients remain — leave status as SENDING so
+  // resumePausedCampaigns finds it again; only mark COMPLETED once nothing is left to send.
+  const stillPending = await prisma.campaignRecipient.count({ where: { campaignId, status: "PENDING" } });
+  if (stillPending === 0) {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "COMPLETED", completedAt: new Date() } });
+  }
+}
+
+/**
+ * Polled periodically (see instrumentation.ts) — resumes any campaign that stopped partway
+ * through because it hit the shared daily send cap, now that a new day's quota may be available.
+ */
+export async function resumePausedCampaigns(): Promise<void> {
+  const paused = await prisma.campaign.findMany({
+    where: { status: "SENDING", recipients: { some: { status: "PENDING" } } },
+    select: { id: true },
+  });
+  for (const { id } of paused) {
+    runCampaignSend(id).catch((err) => console.error("Campaign resume failed:", id, err));
+  }
 }

@@ -1,4 +1,5 @@
 const SEQUENCE_POLL_MS = 15 * 60 * 1000; // how often to check for due drip-sequence steps
+const CAMPAIGN_RESUME_POLL_MS = 15 * 60 * 1000; // how often to resume campaigns paused by the daily send cap
 const HOT_LEAD_ESCALATION_POLL_MS = 15 * 60 * 1000; // how often to check for unanswered hot leads
 const REACTIVATION_POLL_MS = 60 * 60 * 1000; // day-granularity threshold — hourly is plenty
 
@@ -13,6 +14,12 @@ export async function register() {
     const runSequencePoll = () => processDueEnrollments().catch((err) => console.error("Sequence poll failed:", err));
     runSequencePoll();
     setInterval(runSequencePoll, SEQUENCE_POLL_MS);
+
+    const { resumePausedCampaigns } = await import("@/lib/campaign-sender");
+    const runCampaignResumePoll = () =>
+      resumePausedCampaigns().catch((err) => console.error("Campaign resume poll failed:", err));
+    runCampaignResumePoll();
+    setInterval(runCampaignResumePoll, CAMPAIGN_RESUME_POLL_MS);
 
     const { processHotLeadEscalations } = await import("@/lib/hot-lead-escalation");
     const runEscalationPoll = () =>
