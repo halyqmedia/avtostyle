@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth-guard";
 import { assertDealAccess } from "@/lib/deal-access";
 import { PERMISSIONS } from "@/lib/permissions";
 import { uploadMedia } from "@/lib/media-storage";
+import { extensionForMimeType } from "@/lib/document-mime";
 
 // Seed default for a fresh install only — the live prompt actually driving the agent is
 // whatever's stored in the ai_settings row, edited from /admin/ai-agent (or by an operator
@@ -76,11 +77,12 @@ export async function uploadAiDocument(slot: string, formData: FormData): Promis
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) throw new Error("Файл таңдалмады");
-  if (file.type !== "application/pdf") throw new Error("Тек PDF файл жүктеуге болады");
+  const ext = extensionForMimeType(file.type);
+  if (!ext) throw new Error("Тек PDF немесе Word (.doc/.docx) файл жүктеуге болады");
   if (file.size > 20 * 1024 * 1024) throw new Error("Файл тым үлкен (20MB-тан аспауы керек)");
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const key = await uploadMedia(`ai-agent/${slot}.pdf`, buffer, "application/pdf");
+  const key = await uploadMedia(`ai-agent/${slot}.${ext}`, buffer, file.type);
 
   await prisma.aiSettings.upsert({
     where: { id: "default" },

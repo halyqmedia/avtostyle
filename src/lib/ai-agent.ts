@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessage, sendWhatsAppMedia, uploadWhatsAppMedia, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
 import { downloadMedia } from "@/lib/media-storage";
+import { mimeTypeForExtension } from "@/lib/document-mime";
 import { callGemini, getOrCreateSystemCache, type ChatTurn } from "@/lib/gemini";
 
 type RawReply = {
@@ -20,6 +21,7 @@ sendDocument ережелері:
 - Клиент каталог/тауар тізімі/фото/модельдер тізімі туралы сұраса — "CATALOG".
 - Басқа жағдайда — null.
 - Бір сөйлесуде бұрын жіберілген құжатты клиент нақты қайта сұрамаса, қайта-қайта жібермеу.
+- "KP" жібергенде reply мәтінінде міндетті түрде промпттағы коммерциялық жетекшінің байланысын да қоса жаз — құжатты оқып болған соң туындайтын кез келген нақты сұрақ/келіссөз енді тікелей соған баратынын ескерт.
 language: осы жауап қай тілде жазылғанын көрсет ("KK" — қазақша, "RU" — орысша) — файл сол тілде таңдалады.`;
 
 async function sendAiDocument(
@@ -41,18 +43,23 @@ async function sendAiDocument(
         : settings.catalogMediaKeyKk;
   if (!mediaKey) return; // admin hasn't uploaded this file yet — skip quietly, text reply already sent
 
-  const fileName =
+  // The file's real format lives in the stored key's extension (see uploadAiDocument) — KP/catalog
+  // documents can be a PDF or a Word file, no longer always PDF.
+  const ext = mediaKey.split(".").pop()?.toLowerCase() ?? "pdf";
+  const mimeType = mimeTypeForExtension(ext);
+  const baseName =
     kind === "KP"
       ? language === "RU"
-        ? "AVTOSTYLE_KP.pdf"
-        : "AVTOSTYLE_KP_kaz.pdf"
+        ? "AVTOSTYLE_KP"
+        : "AVTOSTYLE_KP_kaz"
       : language === "RU"
-        ? "AVTOSTYLE_katalog.pdf"
-        : "AVTOSTYLE_katalog_kaz.pdf";
+        ? "AVTOSTYLE_katalog"
+        : "AVTOSTYLE_katalog_kaz";
+  const fileName = `${baseName}.${ext}`;
 
   try {
     const buffer = await downloadMedia(mediaKey);
-    const mediaId = await uploadWhatsAppMedia(buffer, "application/pdf");
+    const mediaId = await uploadWhatsAppMedia(buffer, mimeType);
     const { idMessage } = await sendWhatsAppMedia(recipient, "document", mediaId, { filename: fileName });
 
     await prisma.whatsAppMessage.create({
@@ -62,7 +69,7 @@ async function sendAiDocument(
         body: "",
         messageType: "document",
         mediaUrl: mediaKey,
-        mediaMimeType: "application/pdf",
+        mediaMimeType: mimeType,
         fileName,
         whatsappMessageId: idMessage,
         aiGenerated: true,

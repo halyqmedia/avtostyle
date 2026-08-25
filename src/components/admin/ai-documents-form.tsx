@@ -43,7 +43,7 @@ function DocumentSlot({ slot, label, uploaded }: { slot: string; label: string; 
         <input
           ref={inputRef}
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
