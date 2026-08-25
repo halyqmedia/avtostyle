@@ -224,7 +224,29 @@ async function handleStatusUpdate(status: CloudStatus) {
   }
 
   // Mirror delivery status onto the campaign recipient row, if this message was a broadcast send.
+  const recipient = await prisma.campaignRecipient.findFirst({ where: { whatsappMessageId: status.id } });
+  if (!recipient) return;
+
   await prisma.campaignRecipient
-    .updateMany({ where: { whatsappMessageId: status.id }, data: { status: normalizedStatus, errorMessage } })
+    .update({ where: { id: recipient.id }, data: { status: normalizedStatus, errorMessage } })
     .catch(() => {});
+
+  // The send loop counts every accepted send toward sentCount optimistically, but Meta can still
+  // reject delivery moments later via this webhook (e.g. a billing/eligibility problem on the
+  // WABA) — move the tally from sent to failed (or back) whenever a recipient's FAILED-ness
+  // actually changes, so the campaign page doesn't keep showing a stale "sent" count for a
+  // message that never really arrived.
+  const wasFailed = recipient.status === "FAILED";
+  const isFailed = normalizedStatus === "FAILED";
+  if (wasFailed !== isFailed) {
+    await prisma.campaign
+      .update({
+        where: { id: recipient.campaignId },
+        data: {
+          failedCount: { increment: isFailed ? 1 : -1 },
+          sentCount: { increment: isFailed ? -1 : 1 },
+        },
+      })
+      .catch(() => {});
+  }
 }

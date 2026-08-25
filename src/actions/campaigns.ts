@@ -187,3 +187,39 @@ export async function stopCampaign(campaignId: string): Promise<void> {
   revalidatePath(`/campaigns/${campaignId}`);
   revalidatePath("/campaigns");
 }
+
+// The exact Meta error text for a WABA-level billing/verification block (not a per-recipient
+// problem like an invalid number) — recipients that failed for this reason get another shot once
+// someone resumes a stopped campaign, since whatever caused it was almost certainly fixed by then.
+const RETRIABLE_SYSTEM_ERROR = "Business eligibility payment issue";
+
+/**
+ * Resumes a manually-stopped campaign. Requeues recipients that failed for the retriable
+ * system-level reason above, then restarts the send loop the same way sendCampaign does.
+ */
+export async function continueCampaign(campaignId: string): Promise<void> {
+  await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
+
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+  if (!campaign) throw new Error("Рассылка табылмады");
+  if (campaign.status !== "STOPPED") throw new Error("Бұл рассылка тоқтатылған күйде емес");
+
+  await prisma.campaignRecipient.updateMany({
+    where: { campaignId, status: "FAILED", errorMessage: RETRIABLE_SYSTEM_ERROR },
+    data: { status: "PENDING", errorMessage: null },
+  });
+
+  // Recompute from the recipient rows rather than trusting the campaign's own counters — those
+  // can drift from send-time optimism vs. later async webhook corrections (see handleStatusUpdate).
+  const [sentCount, failedCount] = await Promise.all([
+    prisma.campaignRecipient.count({ where: { campaignId, status: { in: ["SENT", "DELIVERED", "READ"] } } }),
+    prisma.campaignRecipient.count({ where: { campaignId, status: "FAILED" } }),
+  ]);
+
+  await prisma.campaign.update({ where: { id: campaignId }, data: { status: "SENDING", sentCount, failedCount } });
+
+  runCampaignSend(campaignId).catch((err) => console.error("Campaign continue failed:", campaignId, err));
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/campaigns");
+}
