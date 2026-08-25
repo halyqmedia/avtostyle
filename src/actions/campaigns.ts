@@ -169,3 +169,21 @@ export async function sendCampaign(campaignId: string): Promise<void> {
   revalidatePath(`/campaigns/${campaignId}`);
   revalidatePath("/campaigns");
 }
+
+/**
+ * Stops a running campaign — the active send loop notices within one pacing interval (see
+ * runCampaignSendInner's status check) and exits, and the resume poller skips STOPPED campaigns,
+ * so it never picks back up on its own. Whatever's left PENDING just stays that way.
+ */
+export async function stopCampaign(campaignId: string): Promise<void> {
+  await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
+
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+  if (!campaign) throw new Error("Рассылка табылмады");
+  if (campaign.status !== "SENDING") throw new Error("Бұл рассылка қазір жіберілмей тұр");
+
+  await prisma.campaign.update({ where: { id: campaignId }, data: { status: "STOPPED" } });
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/campaigns");
+}

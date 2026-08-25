@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SendCampaignButton } from "@/components/campaigns/send-campaign-button";
+import { StopCampaignButton } from "@/components/campaigns/stop-campaign-button";
 import { CampaignAutoRefresh } from "@/components/campaigns/campaign-auto-refresh";
 
 const RECIPIENT_STATUS_LABEL: Record<string, string> = {
@@ -17,6 +18,14 @@ const RECIPIENT_STATUS_LABEL: Record<string, string> = {
   DELIVERED: "Жеткізілді",
   READ: "Оқылды",
   FAILED: "Қате",
+};
+
+const CAMPAIGN_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Дайын тұр",
+  SENDING: "Жіберілуде",
+  COMPLETED: "Аяқталды",
+  FAILED: "Қате",
+  STOPPED: "Тоқтатылды",
 };
 
 export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -45,7 +54,17 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         </Link>
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">{campaign.name}</h1>
-          <Badge variant={campaign.status === "COMPLETED" ? "default" : "secondary"}>{campaign.status}</Badge>
+          <Badge
+            variant={
+              campaign.status === "COMPLETED"
+                ? "default"
+                : campaign.status === "FAILED" || campaign.status === "STOPPED"
+                  ? "destructive"
+                  : "secondary"
+            }
+          >
+            {CAMPAIGN_STATUS_LABEL[campaign.status] ?? campaign.status}
+          </Badge>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Шаблон: {campaign.template.name} · {campaign.template.bodyText}
@@ -73,7 +92,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           </div>
           {campaign.status === "DRAFT" && <SendCampaignButton campaignId={campaign.id} />}
           {campaign.status === "SENDING" && (
-            <p className="text-xs text-muted-foreground">Жіберілуде — бет автоматты жаңарып тұрады...</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">Жіберілуде — бет автоматты жаңарып тұрады...</p>
+              <StopCampaignButton campaignId={campaign.id} />
+            </div>
           )}
         </CardContent>
       </Card>

@@ -13,6 +13,7 @@ const CAMPAIGN_STATUS_LABEL: Record<string, string> = {
   SENDING: "Жіберілуде",
   COMPLETED: "Аяқталды",
   FAILED: "Қате",
+  STOPPED: "Тоқтатылды",
 };
 
 export default async function CampaignsPage() {
@@ -66,7 +67,15 @@ export default async function CampaignsPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{c.template.name}</TableCell>
                   <TableCell>
-                    <Badge variant={c.status === "COMPLETED" ? "default" : "secondary"}>
+                    <Badge
+                      variant={
+                        c.status === "COMPLETED"
+                          ? "default"
+                          : c.status === "FAILED" || c.status === "STOPPED"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
                       {CAMPAIGN_STATUS_LABEL[c.status] ?? c.status}
                     </Badge>
                   </TableCell>

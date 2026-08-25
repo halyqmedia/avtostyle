@@ -81,6 +81,11 @@ async function runCampaignSendInner(campaignId: string): Promise<void> {
     // up on a later poll tick once tomorrow's quota opens up (same pattern as sequence sends).
     if (await hasReachedDailyTemplateCap()) break;
 
+    // Someone hit "Тоқтату" (stopCampaign) while this loop was mid-run — notice within one
+    // pacing interval instead of grinding through the rest of the recipient list regardless.
+    const current = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+    if (current?.status !== "SENDING") return;
+
     try {
       const phone = normalizePhone(recipient.contact.phone) ?? recipient.contact.phone;
       const digits = phone.replace(/\D/g, "");
