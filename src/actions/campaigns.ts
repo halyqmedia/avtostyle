@@ -204,9 +204,13 @@ export async function continueCampaign(campaignId: string): Promise<void> {
   if (!campaign) throw new Error("Рассылка табылмады");
   if (campaign.status !== "STOPPED") throw new Error("Бұл рассылка тоқтатылған күйде емес");
 
+  // Clearing sentAt too, not just status/errorMessage — the daily cap counter
+  // (todaysTemplateSendCount) counts by sentAt regardless of current status, so a requeued row
+  // that kept its original sentAt would silently keep counting against today's quota and could
+  // block the very retry it was requeued for.
   await prisma.campaignRecipient.updateMany({
     where: { campaignId, status: "FAILED", errorMessage: RETRIABLE_SYSTEM_ERROR },
-    data: { status: "PENDING", errorMessage: null },
+    data: { status: "PENDING", errorMessage: null, sentAt: null },
   });
 
   // Recompute from the recipient rows rather than trusting the campaign's own counters — those
