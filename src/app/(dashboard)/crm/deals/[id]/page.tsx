@@ -39,7 +39,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         include: { fromStage: true, toStage: true, movedBy: true },
         orderBy: { movedAt: "desc" },
       }),
-      prisma.pipelineStage.findMany({ where: { pipeline: "SALES" }, orderBy: { order: "asc" } }),
+      prisma.pipelineStage.findMany({ where: { pipeline: deal.pipelineStage.pipeline }, orderBy: { order: "asc" } }),
       prisma.dealNote.findMany({
         where: { dealId: deal.id },
         include: { author: true },

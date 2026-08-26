@@ -21,17 +21,18 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  dealsAssigned      Deal[]            @relation("DealAssignee")
-  dealsCreated       Deal[]            @relation("DealCreator")
+  dealsAssigned      Deal[]             @relation("DealAssignee")
+  dealsCreated       Deal[]             @relation("DealCreator")
   stageMoves         StageHistory[]
   dealNotes          DealNote[]
   whatsappMessages   WhatsAppMessage[]
-  productionOrders   ProductionOrder[] @relation("ProductionOrderCreator")
+  productionOrders   ProductionOrder[]  @relation("ProductionOrderCreator")
   purchaseOrders     PurchaseOrder[]
   stockMovements     StockMovement[]
-  transactionsAbout  Transaction[]     @relation("TransactionUser")
-  transactionsLogged Transaction[]     @relation("TransactionCreator")
-  aiSettingsUpdates  AiSettings[]
+  transactionsAbout  Transaction[]      @relation("TransactionUser")
+  transactionsLogged Transaction[]      @relation("TransactionCreator")
+  funnelUpdates      Funnel[]
+  whatsappNumbers    WhatsAppNumber[]
   whatsappSession    WhatsAppSession?
   whatsappTemplates  WhatsAppTemplate[]
   campaigns          Campaign[]
@@ -304,32 +305,37 @@ model Transaction {
 }
 
 model Deal {
-  id              String        @id @default(cuid())
-  title           String
-  clientId        String
-  client          Client        @relation(fields: [clientId], references: [id])
-  productId       String?
-  product         Product?      @relation(fields: [productId], references: [id])
-  amount          Decimal       @db.Decimal(12, 2)
-  prepayment      Decimal       @default(0) @db.Decimal(12, 2)
-  pipelineStageId String
-  pipelineStage   PipelineStage @relation("DealStage", fields: [pipelineStageId], references: [id], onDelete: Restrict)
-  assignedToId    String?
-  assignedTo      User?         @relation("DealAssignee", fields: [assignedToId], references: [id])
-  createdById     String
-  createdBy       User          @relation("DealCreator", fields: [createdById], references: [id])
-  source          String?
-  comment         String?
-  aiEnabled       Boolean       @default(true) // AI agent auto-replies on WhatsApp while true; a manager can take over any time
-  aiTemperature   String? // HOT | WARM | COLD — AI's read of how close this lead is to buying, from the last analyzed conversation
-  aiSummary       String? // AI's short read of where the conversation stands, for the manager's copilot panel
-  aiSignals       String[] @default([]) // short factual observations pulled from the conversation (e.g. "asked for the director's contact")
-  aiNextAction    String? // AI's concrete suggested next step for the manager
-  aiAnalyzedAt    DateTime? // when aiTemperature/aiSummary/aiNextAction were last refreshed
-  aiHotSince      DateTime? // when temperature most recently flipped to HOT — cleared once a human replies or it cools down
-  aiEscalatedAt   DateTime? // set once an unanswered-hot-lead escalation has fired for the current aiHotSince window
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id               String          @id @default(cuid())
+  title            String
+  clientId         String
+  client           Client          @relation(fields: [clientId], references: [id])
+  productId        String?
+  product          Product?        @relation(fields: [productId], references: [id])
+  amount           Decimal         @db.Decimal(12, 2)
+  prepayment       Decimal         @default(0) @db.Decimal(12, 2)
+  pipelineStageId  String
+  pipelineStage    PipelineStage   @relation("DealStage", fields: [pipelineStageId], references: [id], onDelete: Restrict)
+  // Which WhatsApp number this lead came in on — decides which Funnel's AI script/KP files apply
+  // and which number an AI reply is sent from. Null for deals created before multi-funnel support
+  // (or from a non-WhatsApp source), which fall back to the env-configured default number/funnel.
+  whatsappNumberId String?
+  whatsappNumber   WhatsAppNumber? @relation(fields: [whatsappNumberId], references: [id])
+  assignedToId     String?
+  assignedTo       User?           @relation("DealAssignee", fields: [assignedToId], references: [id])
+  createdById      String
+  createdBy        User            @relation("DealCreator", fields: [createdById], references: [id])
+  source           String?
+  comment          String?
+  aiEnabled        Boolean         @default(true) // AI agent auto-replies on WhatsApp while true; a manager can take over any time
+  aiTemperature    String? // HOT | WARM | COLD — AI's read of how close this lead is to buying, from the last analyzed conversation
+  aiSummary        String? // AI's short read of where the conversation stands, for the manager's copilot panel
+  aiSignals        String[]        @default([]) // short factual observations pulled from the conversation (e.g. "asked for the director's contact")
+  aiNextAction     String? // AI's concrete suggested next step for the manager
+  aiAnalyzedAt     DateTime? // when aiTemperature/aiSummary/aiNextAction were last refreshed
+  aiHotSince       DateTime? // when temperature most recently flipped to HOT — cleared once a human replies or it cools down
+  aiEscalatedAt    DateTime? // set once an unanswered-hot-lead escalation has fired for the current aiHotSince window
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   notes            DealNote[]
   whatsappMessages WhatsAppMessage[]
@@ -338,6 +344,7 @@ model Deal {
 
   @@index([assignedToId])
   @@index([pipelineStageId])
+  @@index([whatsappNumberId])
   @@map("deals")
 }
 
@@ -358,27 +365,27 @@ model DealNote {
 
 /// Two-way WhatsApp message log per deal (inbound from client, outbound sent from the CRM).
 model WhatsAppMessage {
-  id                String   @id @default(cuid())
+  id                String           @id @default(cuid())
   dealId            String
-  deal              Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  deal              Deal             @relation(fields: [dealId], references: [id], onDelete: Cascade)
   direction         String // "IN" | "OUT"
   body              String
-  messageType       String   @default("text") // text | image | document | audio | video
+  messageType       String           @default("text") // text | image | document | audio | video
   mediaUrl          String? // our bucket URL — Meta's own media links expire after 5 days
   mediaMimeType     String?
   fileName          String?
   whatsappMessageId String?
-  status            String   @default("SENT") // SENT | DELIVERED | READ | FAILED — synced from Cloud API status webhooks
+  status            String           @default("SENT") // SENT | DELIVERED | READ | FAILED — synced from Cloud API status webhooks
   errorMessage      String?
   sentById          String?
-  sentBy            User?    @relation(fields: [sentById], references: [id])
-  aiGenerated       Boolean  @default(false)
+  sentBy            User?            @relation(fields: [sentById], references: [id])
+  aiGenerated       Boolean          @default(false)
   promptTokens      Int? // Gemini usageMetadata, only set on aiGenerated messages — for cost tracking
   completionTokens  Int?
   channel           String           @default("CLOUD_API") // CLOUD_API (shared Meta bot number) | PERSONAL (a manager's own Baileys-linked WhatsApp)
   sessionId         String?
   session           WhatsAppSession? @relation(fields: [sessionId], references: [id])
-  createdAt         DateTime @default(now())
+  createdAt         DateTime         @default(now())
 
   @@index([dealId])
   @@index([whatsappMessageId])
@@ -420,10 +427,16 @@ model WhatsAppAuthKey {
   @@map("whatsapp_auth_keys")
 }
 
-/// Singleton (id = "default") config for the WhatsApp AI sales agent.
-model AiSettings {
-  id                 String   @id @default("default")
-  enabled            Boolean  @default(false) // global kill switch — off until reviewed and turned on deliberately
+/// A sales funnel ("воронка") — one per product line. Owns its own AI sales-agent config
+/// (system prompt, model, KP/catalog files) and, via WhatsAppNumber, the WhatsApp number(s) and
+/// manager(s) that work its leads. `key` matches PipelineStage.pipeline for that funnel's kanban
+/// stages. Replaces the old single-row AiSettings singleton now that there's more than one script.
+model Funnel {
+  id                 String   @id @default(cuid())
+  key                String   @unique
+  name               String
+  isActive           Boolean  @default(true)
+  aiEnabled          Boolean  @default(false) // per-funnel kill switch — off until reviewed and turned on deliberately
   systemPrompt       String // business context, tone, sales script, handoff rules
   model              String   @default("gemini-3.5-flash-lite")
   maxHistoryMessages Int      @default(10) // chat turns sent as context — keeps prompts (and cost) small
@@ -432,11 +445,35 @@ model AiSettings {
   kpMediaKeyRu       String? // same, Russian-language file
   catalogMediaKeyKk  String? // bucket key — product catalog PDF, Kazakh
   catalogMediaKeyRu  String? // same, Russian
+  createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   updatedById        String?
   updatedBy          User?    @relation(fields: [updatedById], references: [id])
 
-  @@map("ai_settings")
+  whatsappNumbers WhatsAppNumber[]
+
+  @@map("funnels")
+}
+
+/// One Meta Cloud API phone number, routed to exactly one Funnel and (optionally) one manager —
+/// an inbound message's `phone_number_id` (from the webhook payload) is looked up here to decide
+/// which funnel's AI script/KP files apply and who a brand-new lead gets auto-assigned to.
+model WhatsAppNumber {
+  id            String   @id @default(cuid())
+  phoneNumberId String   @unique // Meta Cloud API phone_number_id
+  label         String
+  accessToken   String? // per-number override; falls back to WHATSAPP_CLOUD_ACCESS_TOKEN env when unset
+  funnelId      String
+  funnel        Funnel   @relation(fields: [funnelId], references: [id])
+  managerId     String?
+  manager       User?    @relation(fields: [managerId], references: [id])
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deals Deal[]
+
+  @@map("whatsapp_numbers")
 }
 
 /// Generic audit trail, reused for ProductionOrder etc. in later phases.
@@ -565,20 +602,20 @@ model WhatsAppTemplate {
 
 /// A bulk send job: one approved template fanned out to an uploaded contact list.
 model Campaign {
-  id          String   @id @default(cuid())
-  name        String
-  templateId  String
-  template    WhatsAppTemplate @relation(fields: [templateId], references: [id])
-  status      String   @default("DRAFT") // DRAFT | SENDING | COMPLETED | FAILED | STOPPED
-  totalCount  Int      @default(0)
-  sentCount   Int      @default(0)
-  failedCount Int      @default(0)
+  id                String           @id @default(cuid())
+  name              String
+  templateId        String
+  template          WhatsAppTemplate @relation(fields: [templateId], references: [id])
+  status            String           @default("DRAFT") // DRAFT | SENDING | COMPLETED | FAILED | STOPPED
+  totalCount        Int              @default(0)
+  sentCount         Int              @default(0)
+  failedCount       Int              @default(0)
   headerMetaMediaId String? // Meta media id for the template's header file, uploaded once and reused for every recipient in this run
-  createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id])
-  createdAt   DateTime @default(now())
-  startedAt   DateTime?
-  completedAt DateTime?
+  createdById       String
+  createdBy         User             @relation(fields: [createdById], references: [id])
+  createdAt         DateTime         @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
 
   recipients CampaignRecipient[]
 
@@ -610,13 +647,13 @@ model CampaignRecipient {
 /// 4 more days) — an enrolled Contact advances one SequenceStep at a time and stops the moment
 /// they reply, unlike a Campaign which is always a single one-shot send.
 model Sequence {
-  id          String   @id @default(cuid())
-  name        String
-  status      String   @default("DRAFT") // DRAFT | ACTIVE | PAUSED
-  isReactivationDefault Boolean @default(false) // the one sequence AI-detected cold/silent leads auto-enroll into
-  createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id])
-  createdAt   DateTime @default(now())
+  id                    String   @id @default(cuid())
+  name                  String
+  status                String   @default("DRAFT") // DRAFT | ACTIVE | PAUSED
+  isReactivationDefault Boolean  @default(false) // the one sequence AI-detected cold/silent leads auto-enroll into
+  createdById           String
+  createdBy             User     @relation(fields: [createdById], references: [id])
+  createdAt             DateTime @default(now())
 
   steps       SequenceStep[]
   enrollments SequenceEnrollment[]
@@ -625,15 +662,15 @@ model Sequence {
 }
 
 model SequenceStep {
-  id         String   @id @default(cuid())
-  sequenceId String
-  sequence   Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
-  order      Int // 1, 2, 3... — send order within the sequence
-  templateId String
-  template   WhatsAppTemplate @relation(fields: [templateId], references: [id])
-  delayDays  Int // days after the previous step (or after enrollment, for step 1) before sending — only if the contact hasn't replied yet
+  id                String           @id @default(cuid())
+  sequenceId        String
+  sequence          Sequence         @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  order             Int // 1, 2, 3... — send order within the sequence
+  templateId        String
+  template          WhatsAppTemplate @relation(fields: [templateId], references: [id])
+  delayDays         Int // days after the previous step (or after enrollment, for step 1) before sending — only if the contact hasn't replied yet
   headerMetaMediaId String? // this step's template header file, uploaded to Meta once and reused for every enrollment
-  createdAt  DateTime @default(now())
+  createdAt         DateTime         @default(now())
 
   @@unique([sequenceId, order])
   @@map("sequence_steps")

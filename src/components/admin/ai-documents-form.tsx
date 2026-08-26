@@ -7,7 +7,17 @@ import { uploadAiDocument } from "@/actions/ai-settings";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
-function DocumentSlot({ slot, label, uploaded }: { slot: string; label: string; uploaded: boolean }) {
+function DocumentSlot({
+  funnelId,
+  slot,
+  label,
+  uploaded,
+}: {
+  funnelId: string;
+  slot: string;
+  label: string;
+  uploaded: boolean;
+}) {
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -16,7 +26,7 @@ function DocumentSlot({ slot, label, uploaded }: { slot: string; label: string; 
     formData.set("file", file);
     startTransition(async () => {
       try {
-        await uploadAiDocument(slot, formData);
+        await uploadAiDocument(funnelId, slot, formData);
         toast.success(`${label} жүктелді`);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Жүктелмеді");
@@ -65,11 +75,13 @@ function DocumentSlot({ slot, label, uploaded }: { slot: string; label: string; 
 }
 
 export function AiDocumentsForm({
+  funnelId,
   hasKpKk,
   hasKpRu,
   hasCatalogKk,
   hasCatalogRu,
 }: {
+  funnelId: string;
   hasKpKk: boolean;
   hasKpRu: boolean;
   hasCatalogKk: boolean;
@@ -89,7 +101,7 @@ export function AiDocumentsForm({
         клиенттің сөйлеу тіліне қарай өзі таңдайды.
       </Label>
       {slots.map((s) => (
-        <DocumentSlot key={s.slot} {...s} />
+        <DocumentSlot key={s.slot} funnelId={funnelId} {...s} />
       ))}
     </div>
   );

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { downloadWhatsAppMedia } from "@/lib/whatsapp-cloud";
+import { downloadWhatsAppMedia, type WhatsAppCredentials } from "@/lib/whatsapp-cloud";
 import { uploadMedia } from "@/lib/media-storage";
 import { normalizePhone } from "@/lib/phone";
 import { maybeSendAiReply } from "@/lib/ai-agent";
@@ -95,9 +95,21 @@ export async function POST(req: NextRequest) {
       const contacts = (value.contacts as CloudContact[]) ?? [];
       const messages = (value.messages as CloudMessage[]) ?? [];
       const statuses = (value.statuses as CloudStatus[]) ?? [];
+      const metadata = value.metadata as { phone_number_id?: string } | undefined;
+
+      // Which registered number received this message decides its funnel (AI script/KP files),
+      // its default manager, and (for replies) which credentials to send back with. An
+      // unregistered/legacy number (metadata missing, or not yet added in /admin/whatsapp-numbers)
+      // falls back to the original single-funnel/env-credential behavior.
+      const whatsappNumber = metadata?.phone_number_id
+        ? await prisma.whatsAppNumber.findUnique({
+            where: { phoneNumberId: metadata.phone_number_id },
+            include: { funnel: true },
+          })
+        : null;
 
       for (const msg of messages) {
-        const dealId = await handleInboundMessage(msg, contacts);
+        const dealId = await handleInboundMessage(msg, contacts, whatsappNumber);
         if (dealId) lastDealId = dealId;
       }
       for (const status of statuses) {
@@ -122,7 +134,24 @@ export async function POST(req: NextRequest) {
 
 const MEDIA_KINDS = ["image", "document", "audio", "video"] as const;
 
-async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[]): Promise<string | undefined> {
+type InboundWhatsAppNumber = {
+  id: string;
+  managerId: string | null;
+  accessToken: string | null;
+  phoneNumberId: string;
+  funnel: { key: string };
+} | null;
+
+function numberCredentials(whatsappNumber: InboundWhatsAppNumber): WhatsAppCredentials | undefined {
+  if (!whatsappNumber?.accessToken) return undefined;
+  return { phoneNumberId: whatsappNumber.phoneNumberId, token: whatsappNumber.accessToken };
+}
+
+async function handleInboundMessage(
+  msg: CloudMessage,
+  contacts: CloudContact[],
+  whatsappNumber: InboundWhatsAppNumber,
+): Promise<string | undefined> {
   const waId = msg.from; // digits only, e.g. "77475960696"
   const senderName = contacts.find((c) => c.wa_id === waId)?.profile?.name || "WhatsApp клиент";
 
@@ -133,14 +162,14 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
   let mediaMimeType: string | undefined;
   let audioTranscript: string | undefined;
   if (media) {
-    const { buffer, mimeType } = await downloadWhatsAppMedia(media.id);
+    const { buffer, mimeType } = await downloadWhatsAppMedia(media.id, numberCredentials(whatsappNumber));
     mediaKey = await uploadMedia(`whatsapp/in/${msg.id}`, buffer, mimeType);
     mediaMimeType = mimeType;
 
     if (msg.type === "audio") {
       try {
-        const settings = await prisma.aiSettings.findUnique({ where: { id: "default" } });
-        if (settings?.enabled) {
+        const settings = await prisma.funnel.findUnique({ where: { key: whatsappNumber?.funnel.key ?? "SALES" } });
+        if (settings?.aiEnabled) {
           audioTranscript = await transcribeAudio({ model: settings.model, audioBuffer: buffer, mimeType });
         }
       } catch (err) {
@@ -173,6 +202,9 @@ async function handleInboundMessage(msg: CloudMessage, contacts: CloudContact[])
     // Temporary placeholder title — the assigned manager renames it once they've spoken to the client.
     dealTitle: phone,
     dealComment: text,
+    funnelKey: whatsappNumber?.funnel.key,
+    whatsappNumberId: whatsappNumber?.id,
+    assignedToId: whatsappNumber?.managerId ?? undefined,
   });
 
   await prisma.whatsAppMessage.create({

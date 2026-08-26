@@ -22,17 +22,17 @@ type RawAnalysis = {
  * won/lost is a human call, not something the agent decides on its own.
  */
 export async function analyzeDeal(dealId: string): Promise<void> {
-  const settings = await prisma.aiSettings.findUnique({ where: { id: "default" } });
-  if (!settings?.enabled) return;
-
   const deal = await prisma.deal.findUnique({
     where: { id: dealId },
     include: { client: true, pipelineStage: true },
   });
   if (!deal || !deal.aiEnabled || deal.pipelineStage.isFinal) return;
 
+  const settings = await prisma.funnel.findUnique({ where: { key: deal.pipelineStage.pipeline } });
+  if (!settings?.aiEnabled) return;
+
   const stages = await prisma.pipelineStage.findMany({
-    where: { pipeline: "SALES", isFinal: false },
+    where: { pipeline: deal.pipelineStage.pipeline, isFinal: false },
     orderBy: { order: "asc" },
   });
 

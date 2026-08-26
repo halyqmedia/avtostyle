@@ -16,8 +16,24 @@ export async function findOrCreateLeadForPhone(opts: {
   assignedToId?: string;
   dealTitle?: string;
   dealComment?: string;
+  // Which funnel a brand-new deal's default stage comes from, and which WhatsApp number it's
+  // tied to for later AI replies (see WhatsAppNumber). Defaults to the original single-funnel
+  // behavior for call sites that haven't been updated yet (e.g. Baileys personal-number chats).
+  funnelKey?: string;
+  whatsappNumberId?: string;
 }): Promise<{ clientId: string; dealId: string; isNewDeal: boolean }> {
-  const { phone, whatsappDigits, fallbackName, source, createdById, assignedToId, dealTitle, dealComment } = opts;
+  const {
+    phone,
+    whatsappDigits,
+    fallbackName,
+    source,
+    createdById,
+    assignedToId,
+    dealTitle,
+    dealComment,
+    funnelKey = "SALES",
+    whatsappNumberId,
+  } = opts;
 
   let client = await prisma.client.findUnique({ where: { phone } });
   if (!client) {
@@ -34,14 +50,20 @@ export async function findOrCreateLeadForPhone(opts: {
   });
 
   if (existingActiveDeal) {
-    if (!existingActiveDeal.assignedToId && assignedToId) {
-      await prisma.deal.update({ where: { id: existingActiveDeal.id }, data: { assignedToId } });
+    const backfill: { assignedToId?: string; whatsappNumberId?: string } = {};
+    if (!existingActiveDeal.assignedToId && assignedToId) backfill.assignedToId = assignedToId;
+    // Pre-migration deals (or ones started before a number was registered) had no
+    // whatsappNumberId — pick it up on a later message so AI replies start using the right
+    // funnel/credentials, without disturbing a deal that's already tied to a number.
+    if (!existingActiveDeal.whatsappNumberId && whatsappNumberId) backfill.whatsappNumberId = whatsappNumberId;
+    if (Object.keys(backfill).length > 0) {
+      await prisma.deal.update({ where: { id: existingActiveDeal.id }, data: backfill });
     }
     return { clientId: client.id, dealId: existingActiveDeal.id, isNewDeal: false };
   }
 
-  const defaultStage = await prisma.pipelineStage.findFirst({ where: { pipeline: "SALES", isDefault: true } });
-  if (!defaultStage) throw new Error("Sales pipeline-де әдепкі кезең табылмады");
+  const defaultStage = await prisma.pipelineStage.findFirst({ where: { pipeline: funnelKey, isDefault: true } });
+  if (!defaultStage) throw new Error(`"${funnelKey}" pipeline-де әдепкі кезең табылмады`);
 
   const deal = await prisma.deal.create({
     data: {
@@ -49,6 +71,7 @@ export async function findOrCreateLeadForPhone(opts: {
       clientId: client.id,
       amount: 0,
       pipelineStageId: defaultStage.id,
+      whatsappNumberId,
       createdById,
       assignedToId,
       source,

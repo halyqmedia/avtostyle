@@ -12,9 +12,6 @@ import { callGemini, type ChatTurn } from "@/lib/gemini";
 export async function askAiAboutDeal(dealId: string, question: string, history: ChatTurn[]): Promise<string> {
   await assertDealAccess(dealId);
 
-  const settings = await prisma.aiSettings.findUnique({ where: { id: "default" } });
-  if (!settings?.enabled) throw new Error("ИИ агент өшірулі");
-
   const trimmed = question.trim();
   if (!trimmed) throw new Error("Сұрақ бос болмауы керек");
 
@@ -22,6 +19,9 @@ export async function askAiAboutDeal(dealId: string, question: string, history: 
     where: { id: dealId },
     include: { client: true, pipelineStage: true },
   });
+
+  const settings = await prisma.funnel.findUnique({ where: { key: deal.pipelineStage.pipeline } });
+  if (!settings?.aiEnabled) throw new Error("ИИ агент өшірулі");
 
   const recentMessages = await prisma.whatsAppMessage.findMany({
     where: { dealId, messageType: { in: ["text", "audio"] }, body: { not: "" } },

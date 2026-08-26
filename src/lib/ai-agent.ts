@@ -1,6 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { sendWhatsAppMessage, sendWhatsAppMedia, uploadWhatsAppMedia, toWhatsAppRecipient } from "@/lib/whatsapp-cloud";
+import {
+  sendWhatsAppMessage,
+  sendWhatsAppMedia,
+  uploadWhatsAppMedia,
+  toWhatsAppRecipient,
+  type WhatsAppCredentials,
+} from "@/lib/whatsapp-cloud";
 import { downloadMedia } from "@/lib/media-storage";
 import { mimeTypeForExtension } from "@/lib/document-mime";
 import { callGemini, getOrCreateSystemCache, type ChatTurn } from "@/lib/gemini";
@@ -24,23 +30,29 @@ sendDocument ережелері:
 - "KP" жібергенде reply мәтінінде міндетті түрде промпттағы коммерциялық жетекшінің байланысын да қоса жаз — құжатты оқып болған соң туындайтын кез келген нақты сұрақ/келіссөз енді тікелей соған баратынын ескерт.
 language: осы жауап қай тілде жазылғанын көрсет ("KK" — қазақша, "RU" — орысша) — файл сол тілде таңдалады.`;
 
+type FunnelAiSettings = {
+  kpMediaKeyKk: string | null;
+  kpMediaKeyRu: string | null;
+  catalogMediaKeyKk: string | null;
+  catalogMediaKeyRu: string | null;
+};
+
 async function sendAiDocument(
   dealId: string,
   recipient: string,
   kind: "KP" | "CATALOG",
   language: "KK" | "RU",
+  funnel: FunnelAiSettings,
+  credentials: WhatsAppCredentials | undefined,
 ): Promise<void> {
-  const settings = await prisma.aiSettings.findUnique({ where: { id: "default" } });
-  if (!settings) return;
-
   const mediaKey =
     kind === "KP"
       ? language === "RU"
-        ? settings.kpMediaKeyRu
-        : settings.kpMediaKeyKk
+        ? funnel.kpMediaKeyRu
+        : funnel.kpMediaKeyKk
       : language === "RU"
-        ? settings.catalogMediaKeyRu
-        : settings.catalogMediaKeyKk;
+        ? funnel.catalogMediaKeyRu
+        : funnel.catalogMediaKeyKk;
   if (!mediaKey) return; // admin hasn't uploaded this file yet — skip quietly, text reply already sent
 
   // The file's real format lives in the stored key's extension (see uploadAiDocument) — KP/catalog
@@ -59,8 +71,14 @@ async function sendAiDocument(
 
   try {
     const buffer = await downloadMedia(mediaKey);
-    const mediaId = await uploadWhatsAppMedia(buffer, mimeType);
-    const { idMessage } = await sendWhatsAppMedia(recipient, "document", mediaId, { filename: fileName });
+    const mediaId = await uploadWhatsAppMedia(buffer, mimeType, credentials);
+    const { idMessage } = await sendWhatsAppMedia(
+      recipient,
+      "document",
+      mediaId,
+      { filename: fileName },
+      credentials,
+    );
 
     await prisma.whatsAppMessage.create({
       data: {
@@ -87,14 +105,23 @@ async function sendAiDocument(
  * must never take down webhook processing (a manager can always take over manually).
  */
 export async function maybeSendAiReply(dealId: string): Promise<void> {
-  const settings = await prisma.aiSettings.findUnique({ where: { id: "default" } });
-  if (!settings?.enabled) return;
-
   const deal = await prisma.deal.findUnique({
     where: { id: dealId },
-    include: { client: true, pipelineStage: true },
+    include: { client: true, pipelineStage: true, whatsappNumber: true },
   });
   if (!deal || !deal.aiEnabled || deal.pipelineStage.isFinal) return;
+
+  // Which funnel this conversation belongs to — and therefore whose AI script/KP files apply —
+  // is decided by the deal's own pipeline (set at creation time from the receiving WhatsApp
+  // number, see webhooks/whatsapp/route.ts). Deals predating multi-funnel support have no
+  // matching funnel row edge case covered by falling back to "SALES".
+  const settings = await prisma.funnel.findUnique({ where: { key: deal.pipelineStage.pipeline } });
+  if (!settings?.aiEnabled) return;
+
+  const credentials =
+    deal.whatsappNumber?.accessToken
+      ? { phoneNumberId: deal.whatsappNumber.phoneNumberId, token: deal.whatsappNumber.accessToken }
+      : undefined;
 
   const recentMessages = await prisma.whatsAppMessage.findMany({
     // "audio" messages carry their Gemini-transcribed text in `body`, same as a typed message —
@@ -168,7 +195,7 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
   const recipient = toWhatsAppRecipient(deal.client.whatsappId, deal.client.phone);
   if (!recipient) return;
 
-  const { idMessage } = await sendWhatsAppMessage(recipient, replyText);
+  const { idMessage } = await sendWhatsAppMessage(recipient, replyText, credentials);
 
   await prisma.whatsAppMessage.create({
     data: {
@@ -184,6 +211,6 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
 
   if (parsed.sendDocument === "KP" || parsed.sendDocument === "CATALOG") {
     const language = parsed.language === "RU" ? "RU" : "KK";
-    await sendAiDocument(dealId, recipient, parsed.sendDocument, language);
+    await sendAiDocument(dealId, recipient, parsed.sendDocument, language, settings, credentials);
   }
 }

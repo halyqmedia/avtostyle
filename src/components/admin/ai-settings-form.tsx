@@ -13,10 +13,12 @@ const MODELS = [
 ];
 
 export function AiSettingsForm({
+  funnelId,
   settings,
 }: {
+  funnelId: string;
   settings: {
-    enabled: boolean;
+    aiEnabled: boolean;
     systemPrompt: string;
     model: string;
     maxHistoryMessages: number;
@@ -24,14 +26,15 @@ export function AiSettingsForm({
   };
 }) {
   const [state, formAction, pending] = useActionState(updateAiSettings, undefined);
-  const [enabled, setEnabled] = useState(settings.enabled);
+  const [enabled, setEnabled] = useState(settings.aiEnabled);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="funnelId" value={funnelId} />
       <label className="flex items-center gap-2 text-sm font-medium">
         <input
           type="checkbox"
-          name="enabled"
+          name="aiEnabled"
           checked={enabled}
           onChange={(e) => setEnabled(e.target.checked)}
           className="size-4"

@@ -7,7 +7,8 @@ const TABS = [
   { href: "/admin/roles", label: "Рөлдер мен доступ" },
   { href: "/admin/pipeline-stages", label: "Pipeline кезеңдері" },
   { href: "/admin/quick-replies", label: "Жылдам жауаптар" },
-  { href: "/admin/ai-agent", label: "ИИ агент" },
+  { href: "/admin/funnels", label: "Воронкалар" },
+  { href: "/admin/whatsapp-numbers", label: "WhatsApp нөмірлері" },
   { href: "/admin/ai-accuracy", label: "ИИ дәлдігі" },
 ];
 

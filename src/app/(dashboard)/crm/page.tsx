@@ -6,7 +6,11 @@ import { PERMISSIONS, hasPermission } from "@/lib/permissions";
 import { CrmWorkspace } from "@/components/crm/crm-workspace";
 import { Button } from "@/components/ui/button";
 
-export default async function CrmPage() {
+export default async function CrmPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ funnel?: string }>;
+}) {
   const session = await requireSession();
   const canViewAll = hasPermission(session.user.permissions, PERMISSIONS.DEALS_VIEW_ALL);
   const canViewOwn = hasPermission(session.user.permissions, PERMISSIONS.DEALS_VIEW_OWN);
@@ -14,10 +18,30 @@ export default async function CrmPage() {
   const canCreate = hasPermission(session.user.permissions, PERMISSIONS.DEALS_CREATE);
   if (!canViewAll && !canViewOwn) redirect("/no-access");
 
+  const [funnels, { funnel: requestedFunnelKey }] = await Promise.all([
+    prisma.funnel.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    searchParams,
+  ]);
+
+  // Default to the funnel whose WhatsApp number has this person as its manager (their main work
+  // queue), falling back to "SALES" or simply the first active funnel for everyone else.
+  const myNumber = !requestedFunnelKey
+    ? await prisma.whatsAppNumber.findFirst({ where: { managerId: session.user.id }, include: { funnel: true } })
+    : null;
+  const selectedFunnel =
+    funnels.find((f) => f.key === requestedFunnelKey) ??
+    (myNumber ? funnels.find((f) => f.id === myNumber.funnelId) : undefined) ??
+    funnels.find((f) => f.key === "SALES") ??
+    funnels[0];
+  const selectedFunnelKey = selectedFunnel?.key ?? "SALES";
+
   const [stages, deals, products] = await Promise.all([
-    prisma.pipelineStage.findMany({ where: { pipeline: "SALES" }, orderBy: { order: "asc" } }),
+    prisma.pipelineStage.findMany({ where: { pipeline: selectedFunnelKey }, orderBy: { order: "asc" } }),
     prisma.deal.findMany({
-      where: canViewAll ? {} : { assignedToId: session.user.id },
+      where: {
+        pipelineStage: { pipeline: selectedFunnelKey },
+        ...(canViewAll ? {} : { assignedToId: session.user.id }),
+      },
       include: {
         client: true,
         product: true,
@@ -71,6 +95,22 @@ export default async function CrmPage() {
           </Button>
         )}
       </div>
+      {funnels.length > 1 && (
+        <div className="flex gap-1 border-b">
+          {funnels.map((f) => (
+            <Link
+              key={f.id}
+              href={`/crm?funnel=${f.key}`}
+              className={
+                "rounded-t-md px-3 py-2 text-sm font-medium hover:bg-muted " +
+                (f.key === selectedFunnelKey ? "border-b-2 border-primary text-foreground" : "text-muted-foreground")
+              }
+            >
+              {f.name}
+            </Link>
+          ))}
+        </div>
+      )}
       <CrmWorkspace
         stages={stages.map((s) => ({ id: s.id, name: s.name, color: s.color }))}
         initialDeals={kanbanDeals}

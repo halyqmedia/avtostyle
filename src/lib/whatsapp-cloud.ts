@@ -10,7 +10,10 @@ export function toWhatsAppRecipient(whatsappId: string | null, phone: string | n
   return digits.length >= 10 ? digits : null;
 }
 
-function credentials() {
+export type WhatsAppCredentials = { phoneNumberId: string; token: string };
+
+function credentials(override?: WhatsAppCredentials): WhatsAppCredentials {
+  if (override) return override;
   const phoneNumberId = process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID;
   const token = process.env.WHATSAPP_CLOUD_ACCESS_TOKEN;
   if (!phoneNumberId || !token) {
@@ -19,8 +22,12 @@ function credentials() {
   return { phoneNumberId, token };
 }
 
-export async function sendWhatsAppMessage(to: string, message: string): Promise<{ idMessage: string }> {
-  const { phoneNumberId, token } = credentials();
+export async function sendWhatsAppMessage(
+  to: string,
+  message: string,
+  override?: WhatsAppCredentials,
+): Promise<{ idMessage: string }> {
+  const { phoneNumberId, token } = credentials(override);
 
   const res = await fetch(`${GRAPH_API}/${phoneNumberId}/messages`, {
     method: "POST",
@@ -50,8 +57,9 @@ export async function sendWhatsAppTemplate(
   language: string,
   bodyParams: string[],
   header?: { format: "IMAGE" | "DOCUMENT"; mediaId: string; fileName?: string },
+  override?: WhatsAppCredentials,
 ): Promise<{ idMessage: string }> {
-  const { phoneNumberId, token } = credentials();
+  const { phoneNumberId, token } = credentials(override);
 
   const components: Record<string, unknown>[] = [];
   if (header) {
@@ -91,8 +99,12 @@ export async function sendWhatsAppTemplate(
 }
 
 /** Uploads a file to Meta (required before referencing it in a media message) and returns its media id. */
-export async function uploadWhatsAppMedia(buffer: Buffer, mimeType: string): Promise<string> {
-  const { phoneNumberId, token } = credentials();
+export async function uploadWhatsAppMedia(
+  buffer: Buffer,
+  mimeType: string,
+  override?: WhatsAppCredentials,
+): Promise<string> {
+  const { phoneNumberId, token } = credentials(override);
 
   const form = new FormData();
   form.append("messaging_product", "whatsapp");
@@ -121,8 +133,9 @@ export async function sendWhatsAppMedia(
   kind: MediaKind,
   mediaId: string,
   opts: { filename?: string; caption?: string } = {},
+  override?: WhatsAppCredentials,
 ): Promise<{ idMessage: string }> {
-  const { phoneNumberId, token } = credentials();
+  const { phoneNumberId, token } = credentials(override);
 
   const mediaObject: Record<string, string> = { id: mediaId };
   if (opts.caption && kind !== "audio") mediaObject.caption = opts.caption;
@@ -146,8 +159,11 @@ export async function sendWhatsAppMedia(
 }
 
 /** Downloads a media file Meta told us about via webhook (media id → temporary CDN URL → bytes). */
-export async function downloadWhatsAppMedia(mediaId: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  const { token } = credentials();
+export async function downloadWhatsAppMedia(
+  mediaId: string,
+  override?: WhatsAppCredentials,
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  const { token } = credentials(override);
 
   const metaRes = await fetch(`${GRAPH_API}/${mediaId}`, { headers: { Authorization: `Bearer ${token}` } });
   if (!metaRes.ok) throw new Error(`Медиа сілтемесі табылмады (${metaRes.status})`);
