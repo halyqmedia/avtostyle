@@ -1,8 +1,17 @@
 "use client";
 
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { KanbanColumn, type KanbanStage } from "@/components/kanban/kanban-column";
-import type { KanbanDeal } from "@/components/kanban/deal-card";
+import { DealCardOverlay, type KanbanDeal } from "@/components/kanban/deal-card";
 
 export function KanbanBoard({
   stages,
@@ -18,8 +27,15 @@ export function KanbanBoard({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
+  const [activeDealId, setActiveDealId] = useState<string | null>(null);
+  const activeDeal = activeDealId ? deals.find((d) => d.id === activeDealId) : null;
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDealId(String(event.active.id));
+  }
 
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDealId(null);
     if (!canMove) return;
     const { active, over } = event;
     if (!over) return;
@@ -33,8 +49,14 @@ export function KanbanBoard({
   }
 
   return (
-    <DndContext id="kanban-board" sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex h-[calc(100dvh-230px)] min-h-[320px] gap-3 overflow-x-auto pb-2">
+    <DndContext
+      id="kanban-board"
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveDealId(null)}
+    >
+      <div className="scrollbar-thin flex h-[calc(100dvh-230px)] min-h-[320px] gap-3 overflow-x-auto pb-2">
         {stages.map((stage) => (
           <KanbanColumn
             key={stage.id}
@@ -44,6 +66,7 @@ export function KanbanBoard({
           />
         ))}
       </div>
+      <DragOverlay>{activeDeal ? <DealCardOverlay deal={activeDeal} /> : null}</DragOverlay>
     </DndContext>
   );
 }

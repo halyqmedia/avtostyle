@@ -1,6 +1,7 @@
 "use client";
 
 import { Search, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,12 +52,19 @@ export function CrmFilters({
   visibleCount: number;
   totalCount: number;
 }) {
-  const hasActiveFilters =
-    value.search !== "" ||
-    value.assignedToId !== null ||
-    value.productId !== null ||
-    value.source !== null ||
-    value.temperature !== null;
+  const activeFilterCount = [
+    value.assignedToId !== null,
+    value.productId !== null,
+    value.source !== null,
+    value.temperature !== null,
+  ].filter(Boolean).length;
+  const hasActiveFilters = value.search !== "" || activeFilterCount > 0;
+
+  const chipTrigger = (active: boolean) =>
+    cn(
+      "h-8 gap-1.5 rounded-full border-dashed bg-background text-xs data-placeholder:text-muted-foreground",
+      active && "border-solid border-primary/40 bg-primary/5 text-foreground",
+    );
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -66,8 +74,8 @@ export function CrmFilters({
           <Input
             value={value.search}
             onChange={(e) => onChange({ ...value, search: e.target.value })}
-            placeholder="Іздеу: атауы, клиент, телефон, өнім..."
-            className="h-8 pl-8"
+            placeholder="Клиент, телефон немесе мәміле іздеу"
+            className="h-8 rounded-full pl-8"
           />
         </div>
 
@@ -76,7 +84,7 @@ export function CrmFilters({
             value={value.assignedToId ?? "all"}
             onValueChange={(v) => onChange({ ...value, assignedToId: v === "all" ? null : v })}
           >
-            <SelectTrigger size="sm" className="w-44">
+            <SelectTrigger size="sm" className={cn(chipTrigger(value.assignedToId !== null), "w-auto min-w-32")}>
               <SelectValue placeholder="Маман" />
             </SelectTrigger>
             <SelectContent>
@@ -94,7 +102,7 @@ export function CrmFilters({
           value={value.productId ?? "all"}
           onValueChange={(v) => onChange({ ...value, productId: v === "all" ? null : v })}
         >
-          <SelectTrigger size="sm" className="w-48">
+          <SelectTrigger size="sm" className={cn(chipTrigger(value.productId !== null), "w-auto min-w-28")}>
             <SelectValue placeholder="Өнім" />
           </SelectTrigger>
           <SelectContent>
@@ -112,8 +120,8 @@ export function CrmFilters({
             value={value.source ?? "all"}
             onValueChange={(v) => onChange({ ...value, source: v === "all" ? null : v })}
           >
-            <SelectTrigger size="sm" className="w-40">
-              <SelectValue placeholder="Қайнар көзі" />
+            <SelectTrigger size="sm" className={cn(chipTrigger(value.source !== null), "w-auto min-w-24")}>
+              <SelectValue placeholder="Көз" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Барлық көздер</SelectItem>
@@ -130,7 +138,7 @@ export function CrmFilters({
           value={value.temperature ?? "all"}
           onValueChange={(v) => onChange({ ...value, temperature: v === "all" ? null : v })}
         >
-          <SelectTrigger size="sm" className="w-40">
+          <SelectTrigger size="sm" className={cn(chipTrigger(value.temperature !== null), "w-auto min-w-24")}>
             <SelectValue placeholder="Жылу" />
           </SelectTrigger>
           <SelectContent>
@@ -143,10 +151,17 @@ export function CrmFilters({
           </SelectContent>
         </Select>
 
+        {activeFilterCount > 0 && (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            Фильтрлер {activeFilterCount}
+          </span>
+        )}
+
         {hasActiveFilters && (
           <Button
             variant="ghost"
             size="sm"
+            className="rounded-full"
             onClick={() => onChange({ search: "", assignedToId: null, productId: null, source: null, temperature: null })}
           >
             <X className="size-3.5" />
@@ -155,7 +170,7 @@ export function CrmFilters({
         )}
       </div>
       <p className="whitespace-nowrap text-xs text-muted-foreground">
-        {visibleCount} / {totalCount} сделка
+        {visibleCount} / {totalCount} мәміле
       </p>
     </div>
   );

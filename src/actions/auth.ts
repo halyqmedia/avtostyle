@@ -1,7 +1,7 @@
 "use server";
 
 import { AuthError } from "next-auth";
-import { signIn } from "@/lib/auth";
+import { signIn, signOut } from "@/lib/auth";
 
 export type LoginState = { error?: string } | undefined;
 
@@ -17,4 +17,8 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     }
     throw error;
   }
+}
+
+export async function signOutAction(): Promise<void> {
+  await signOut({ redirectTo: "/login" });
 }

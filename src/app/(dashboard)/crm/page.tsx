@@ -1,10 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { PERMISSIONS, hasPermission } from "@/lib/permissions";
+import { getPipelineStats } from "@/lib/pipeline-stats";
 import { CrmWorkspace } from "@/components/crm/crm-workspace";
+import { PipelineStatsBar } from "@/components/crm/pipeline-stats-bar";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default async function CrmPage({
   searchParams,
@@ -35,7 +39,7 @@ export default async function CrmPage({
     funnels[0];
   const selectedFunnelKey = selectedFunnel?.key ?? "SALES";
 
-  const [stages, deals, products] = await Promise.all([
+  const [stages, deals, products, stats] = await Promise.all([
     prisma.pipelineStage.findMany({ where: { pipeline: selectedFunnelKey }, orderBy: { order: "asc" } }),
     prisma.deal.findMany({
       where: {
@@ -51,6 +55,10 @@ export default async function CrmPage({
       orderBy: { updatedAt: "desc" },
     }),
     prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    getPipelineStats({
+      funnelKey: selectedFunnelKey,
+      assignedToId: canViewAll ? undefined : session.user.id,
+    }),
   ]);
 
   const kanbanDeals = deals.map((d) => ({
@@ -81,30 +89,38 @@ export default async function CrmPage({
   );
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Сату pipeline</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Сату Pipeline</h1>
           <p className="text-sm text-muted-foreground">
-            {canViewAll ? "Барлық сделкалар" : "Сіздің сделкаларыңыз"}
+            {canViewAll ? "Барлық мәмілелерді бір жерден басқарыңыз" : "Сіздің мәмілелеріңіз"}
           </p>
         </div>
         {canCreate && (
-          <Button asChild>
-            <Link href="/crm/deals/new">+ Жаңа сделка</Link>
+          <Button asChild className="shadow-sm shadow-primary/20">
+            <Link href="/crm/deals/new">
+              <Plus className="size-4" />
+              Жаңа мәміле
+            </Link>
           </Button>
         )}
       </div>
+
+      <PipelineStatsBar stats={stats} />
+
       {funnels.length > 1 && (
         <div className="flex gap-1 border-b">
           {funnels.map((f) => (
             <Link
               key={f.id}
               href={`/crm?funnel=${f.key}`}
-              className={
-                "rounded-t-md px-3 py-2 text-sm font-medium hover:bg-muted " +
-                (f.key === selectedFunnelKey ? "border-b-2 border-primary text-foreground" : "text-muted-foreground")
-              }
+              className={cn(
+                "rounded-t-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
+                f.key === selectedFunnelKey
+                  ? "border-b-2 border-primary text-foreground"
+                  : "text-muted-foreground",
+              )}
             >
               {f.name}
             </Link>

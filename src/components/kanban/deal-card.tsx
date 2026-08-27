@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
-import { Flame } from "lucide-react";
+import { Flame, Phone } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { WhatsAppWindowBadge } from "@/components/whatsapp-window-badge";
 import { cn } from "@/lib/utils";
@@ -36,29 +36,18 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-export function DealCard({ deal, disabled }: { deal: KanbanDeal; disabled?: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: deal.id,
-    disabled,
-  });
-
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined;
-
+/** Pure presentational card markup — shared by the draggable in-column card and the floating DragOverlay clone. */
+function DealCardBody({ deal, className }: { deal: KanbanDeal; className?: string }) {
   const remainder = deal.amount - deal.prepayment;
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
       data-testid="deal-card"
       data-deal-id={deal.id}
       className={cn(
-        "flex touch-none cursor-grab select-none flex-col gap-1.5 rounded-lg border bg-background p-3 text-sm shadow-sm active:cursor-grabbing",
-        isDragging && "z-10 opacity-60 shadow-md",
+        "group flex select-none flex-col gap-1.5 rounded-xl border bg-card p-3 text-sm shadow-sm",
+        deal.aiTemperature === "HOT" && "border-l-2 border-l-destructive",
+        className,
       )}
     >
       <div className="flex items-center gap-1.5">
@@ -87,6 +76,42 @@ export function DealCard({ deal, disabled }: { deal: KanbanDeal; disabled?: bool
           </Avatar>
         )}
       </div>
+      {deal.clientPhone && (
+        <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-150 group-hover:max-h-8 group-hover:opacity-100">
+          <a
+            href={`tel:${deal.clientPhone}`}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-1 flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Phone className="size-3" />
+            {deal.clientPhone}
+          </a>
+        </div>
+      )}
     </div>
   );
+}
+
+export function DealCard({ deal, disabled }: { deal: KanbanDeal; disabled?: boolean }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: deal.id,
+    disabled,
+  });
+
+  return (
+    <div ref={setNodeRef} {...listeners} {...attributes} className="touch-none">
+      <DealCardBody
+        deal={deal}
+        className={cn(
+          "cursor-grab transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md active:cursor-grabbing",
+          isDragging && "opacity-30",
+        )}
+      />
+    </div>
+  );
+}
+
+/** Floating clone rendered inside dnd-kit's <DragOverlay> — no drag hooks, just the visual, with a slight scale/shadow lift. */
+export function DealCardOverlay({ deal }: { deal: KanbanDeal }) {
+  return <DealCardBody deal={deal} className="scale-[1.03] cursor-grabbing shadow-xl ring-1 ring-primary/20" />;
 }
