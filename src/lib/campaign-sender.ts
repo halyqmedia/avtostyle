@@ -6,7 +6,11 @@ import { normalizePhone } from "@/lib/phone";
 import { downloadMedia } from "@/lib/media-storage";
 import { hasReachedDailyTemplateCap } from "@/lib/template-send-throttle";
 
-const SEND_GAP_MS = 1500; // pacing between sends — avoid tripping Meta's per-WABA rate/quality limits
+// Pacing between sends. A number on Meta's TIER_250 messaging limit (the default until the
+// display name is approved) reads a fast burst — hundreds of sends in a few minutes — as spammy
+// and starts async-failing already-accepted messages ("Spam Rate limit hit", "healthy ecosystem
+// engagement"), not just rejecting new ones. 4s keeps well clear of that, still only ~13min/day at the cap.
+const SEND_GAP_MS = 4000;
 
 // Guards against the same campaign being driven by two overlapping loops — the initial
 // `sendCampaign` call and a resume poll tick (see resumePausedCampaigns) could otherwise both
@@ -49,6 +53,15 @@ async function runCampaignSendInner(campaignId: string): Promise<void> {
     data: { status: "SENDING", startedAt: campaign.startedAt ?? new Date() },
   });
 
+  // Resync the running totals from the recipient rows themselves at the start of every run —
+  // self-heals any drift from a prior crash mid-loop or (historically) the old absolute-overwrite
+  // bug where a webhook-driven correction landed between two loop writes and got clobbered.
+  const [trueSent, trueFailed] = await Promise.all([
+    prisma.campaignRecipient.count({ where: { campaignId, status: { in: ["SENT", "DELIVERED", "READ"] } } }),
+    prisma.campaignRecipient.count({ where: { campaignId, status: "FAILED" } }),
+  ]);
+  await prisma.campaign.update({ where: { id: campaignId }, data: { sentCount: trueSent, failedCount: trueFailed } });
+
   // The template's header file (if any) is uploaded to Meta once per campaign run and that same
   // media id is reused for every recipient — re-uploading per-message would be wasteful and slow.
   let headerMetaMediaId = campaign.headerMetaMediaId;
@@ -72,9 +85,6 @@ async function runCampaignSendInner(campaignId: string): Promise<void> {
     include: { contact: true },
     orderBy: { createdAt: "asc" },
   });
-
-  let sent = campaign.sentCount;
-  let failed = campaign.failedCount;
 
   for (const recipient of recipients) {
     // Stop for today, leaving the rest PENDING — resumePausedCampaigns picks this campaign back
@@ -137,16 +147,20 @@ async function runCampaignSendInner(campaignId: string): Promise<void> {
         where: { id: recipient.id },
         data: { status: "SENT", dealId, whatsappMessageId: idMessage, sentAt: new Date() },
       });
-      sent++;
+      // Relative increment, not an absolute overwrite — handleStatusUpdate (webhook) also only
+      // ever increments/decrements these fields, so the two can never clobber each other no
+      // matter how they interleave. An earlier version tracked sent/failed in a local variable
+      // and wrote it as a snapshot each iteration, which silently undid any webhook correction
+      // that landed mid-run (a message counted "sent" here, then reported FAILED moments later).
+      await prisma.campaign.update({ where: { id: campaignId }, data: { sentCount: { increment: 1 } } });
     } catch (err) {
       await prisma.campaignRecipient.update({
         where: { id: recipient.id },
         data: { status: "FAILED", errorMessage: err instanceof Error ? err.message : "Белгісіз қате" },
       });
-      failed++;
+      await prisma.campaign.update({ where: { id: campaignId }, data: { failedCount: { increment: 1 } } });
     }
 
-    await prisma.campaign.update({ where: { id: campaignId }, data: { sentCount: sent, failedCount: failed } });
     await new Promise((r) => setTimeout(r, SEND_GAP_MS));
   }
 
