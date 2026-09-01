@@ -9,7 +9,7 @@ import { DealNotes } from "@/components/crm/deal-notes";
 import { DealSummary } from "@/components/crm/deal-summary";
 import { ClientHeader } from "@/components/crm/client-header";
 import { AIInsights } from "@/components/crm/ai-insights";
-import { getMediaUrl } from "@/lib/media-storage";
+import { getDealChatMessages } from "@/lib/deal-chat";
 import { CreateProductionOrderDialog } from "@/components/crm/create-production-order-dialog";
 import { DealAiToggle } from "@/components/crm/deal-ai-toggle";
 import { WhatsAppWindowBadge } from "@/components/whatsapp-window-badge";
@@ -32,7 +32,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   const canCreateProductionOrder = hasPermission(session.user.permissions, PERMISSIONS.PRODUCTION_ORDER_CREATE);
   const isAdmin = session.user.roleKey === "ADMIN";
 
-  const [history, stages, notes, products, salesUsers, whatsappMessages, quickReplies, productionOrders] =
+  const [history, stages, notes, products, salesUsers, chatMessages, lastMessage, quickReplies, productionOrders] =
     await Promise.all([
       prisma.stageHistory.findMany({
         where: { entityType: "DEAL", entityId: deal.id },
@@ -47,11 +47,8 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       }),
       prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       prisma.user.findMany({ where: { role: { key: "SALES" }, isActive: true }, orderBy: { name: "asc" } }),
-      prisma.whatsAppMessage.findMany({
-        where: { dealId: deal.id },
-        include: { sentBy: true },
-        orderBy: { createdAt: "asc" },
-      }),
+      getDealChatMessages(deal),
+      prisma.whatsAppMessage.findFirst({ where: { dealId: deal.id }, orderBy: { createdAt: "desc" }, select: { channel: true } }),
       prisma.quickReply.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.productionOrder.findMany({
         where: { dealId: deal.id },
@@ -60,50 +57,12 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       }),
     ]);
 
-  const chatMessages =
-    whatsappMessages.length > 0
-      ? await Promise.all(
-          whatsappMessages.map(async (m) => ({
-            id: m.id,
-            direction: m.direction as "IN" | "OUT",
-            body: m.body,
-            createdAt: m.createdAt.toISOString(),
-            sentByName: m.sentBy?.name ?? null,
-            status: m.status,
-            errorMessage: m.errorMessage,
-            messageType: m.messageType,
-            mediaSrc: m.mediaUrl ? await getMediaUrl(m.mediaUrl) : null,
-            mediaMimeType: m.mediaMimeType,
-            fileName: m.fileName,
-            aiGenerated: m.aiGenerated,
-          })),
-        )
-      : deal.source === "whatsapp" && deal.comment
-        ? [
-            {
-              id: "initial",
-              direction: "IN" as const,
-              body: deal.comment,
-              createdAt: deal.createdAt.toISOString(),
-              sentByName: null,
-              status: "DELIVERED",
-              errorMessage: null,
-              messageType: "text",
-              mediaSrc: null,
-              mediaMimeType: null,
-              fileName: null,
-              aiGenerated: false,
-            },
-          ]
-        : [];
-
   const amount = Number(deal.amount);
   const prepayment = Number(deal.prepayment);
-  const channel = whatsappMessages[whatsappMessages.length - 1]?.channel ?? "CLOUD_API";
+  const channel = lastMessage?.channel ?? "CLOUD_API";
   const channelLabel = channel === "PERSONAL" ? "Жеке WhatsApp арқылы" : "WABA (ортақ нөмір)";
-  const lastInbound = [...whatsappMessages].reverse().find((m) => m.direction === "IN");
-  const lastInboundAt =
-    (lastInbound?.createdAt ?? (deal.source === "whatsapp" ? deal.createdAt : null))?.toISOString() ?? null;
+  const lastInbound = [...chatMessages].reverse().find((m) => m.direction === "IN");
+  const lastInboundAt = lastInbound?.createdAt ?? (deal.source === "whatsapp" ? deal.createdAt.toISOString() : null);
 
   return (
     <div className="flex flex-col gap-4">

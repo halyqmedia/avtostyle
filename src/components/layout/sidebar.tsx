@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Inbox,
   MessageCircle,
+  MessagesSquare,
   Megaphone,
   ChevronsLeft,
   ChevronsRight,
@@ -25,6 +26,7 @@ import type { Session } from "next-auth";
 
 export const NAV_ITEMS = [
   { href: "/crm", label: "Сату (CRM)", icon: LayoutDashboard, permission: null },
+  { href: "/crm/chats", label: "WhatsApp", icon: MessagesSquare, permission: null },
   { href: "/crm/unassigned", label: "Бөлінбеген лидтер", icon: Inbox, permission: PERMISSIONS.DEALS_ASSIGN },
   { href: "/production", label: "Өндіріс", icon: Factory, permission: PERMISSIONS.PRODUCTION_ACCESS },
   { href: "/finance", label: "Қаржы", icon: Wallet, permission: PERMISSIONS.FINANCE_ACCESS },

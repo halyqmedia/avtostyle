@@ -69,6 +69,8 @@ export async function sendDealWhatsAppMessage(dealId: string, body: string) {
   });
 
   revalidatePath(`/crm/deals/${dealId}`);
+  revalidatePath(`/crm/chats/${dealId}`);
+  revalidatePath("/crm/chats");
 }
 
 export async function sendDealWhatsAppFile(dealId: string, formData: FormData) {
@@ -151,4 +153,6 @@ export async function sendDealWhatsAppFile(dealId: string, formData: FormData) {
   });
 
   revalidatePath(`/crm/deals/${dealId}`);
+  revalidatePath(`/crm/chats/${dealId}`);
+  revalidatePath("/crm/chats");
 }
