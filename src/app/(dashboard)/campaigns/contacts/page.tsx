@@ -8,6 +8,13 @@ function distinct(values: (string | null)[]): string[] {
   return [...new Set(values.filter((v): v is string => !!v))].sort();
 }
 
+/** Calendar-day (not exact timestamp) a contact was first loaded, so a whole upload batch — whose
+ * rows land within the same minute or two — groups under one selectable day instead of scattering
+ * across near-identical timestamps. */
+function uploadDayKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 export default async function CampaignContactsPage() {
   await requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE);
 
@@ -45,6 +52,7 @@ export default async function CampaignContactsPage() {
             status: c.status,
             tags: c.tags,
             notes: c.notes,
+            createdAt: c.createdAt.toISOString(),
             dealId: c.client?.deals[0]?.id ?? null,
           }))}
           cities={distinct(contacts.map((c) => c.city))}
@@ -52,6 +60,7 @@ export default async function CampaignContactsPage() {
           categories={distinct(contacts.map((c) => c.category))}
           statuses={distinct(contacts.map((c) => c.status))}
           tags={distinct(contacts.flatMap((c) => c.tags))}
+          uploadDays={[...new Set(contacts.map((c) => uploadDayKey(c.createdAt)))].sort().reverse()}
           templates={approvedTemplates}
           sequences={sequences.map((s) => ({ id: s.id, name: s.name, stepCount: s.steps.length }))}
         />

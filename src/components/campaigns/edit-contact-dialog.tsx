@@ -8,4 +8,5 @@ export type ContactRow = {
   status: string | null;
   tags: string[];
   notes: string | null;
+  createdAt: string;
 };
