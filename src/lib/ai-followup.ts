@@ -74,7 +74,7 @@ export async function processAiFollowUps(): Promise<void> {
     const history: ChatTurn[] = messages
       .slice()
       .reverse()
-      .filter((m) => m.messageType === "text" || m.messageType === "audio")
+      .filter((m) => m.messageType === "text" || m.messageType === "audio" || m.messageType === "button")
       .filter((m) => m.body !== "")
       .map((m) => ({ role: m.direction === "IN" ? "user" : "model", text: m.body }));
     if (history.length === 0) continue;
