@@ -17,6 +17,19 @@ const SEND_GAP_MS = 4000;
 // pick it up around the same moment.
 const runningCampaigns = new Set<string>();
 
+// Broadcasts only go out 08:00–20:00 Kazakhstan time (UTC+5, no DST) — outside that window a
+// template landing on someone's phone reads as spam, not business correspondence. A campaign
+// started or still running outside the window simply pauses (same mechanism as the daily send
+// cap below) and resumePausedCampaigns picks it back up once the window reopens.
+const SEND_WINDOW_START_HOUR = 8;
+const SEND_WINDOW_END_HOUR = 20;
+const ALMATY_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+function isWithinSendWindow(now: Date = new Date()): boolean {
+  const almatyHour = new Date(now.getTime() + ALMATY_OFFSET_MS).getUTCHours();
+  return almatyHour >= SEND_WINDOW_START_HOUR && almatyHour < SEND_WINDOW_END_HOUR;
+}
+
 /**
  * Paced background broadcast loop — runs to completion in this process (a persistent Railway
  * container, not a serverless function) after the `sendCampaign` action returns, the same way
@@ -87,6 +100,10 @@ async function runCampaignSendInner(campaignId: string): Promise<void> {
   });
 
   for (const recipient of recipients) {
+    // Outside 08:00–20:00 Almaty time — stop here, leaving the rest PENDING, and let
+    // resumePausedCampaigns pick this campaign back up once the window reopens.
+    if (!isWithinSendWindow()) break;
+
     // Stop for today, leaving the rest PENDING — resumePausedCampaigns picks this campaign back
     // up on a later poll tick once tomorrow's quota opens up (same pattern as sequence sends).
     if (await hasReachedDailyTemplateCap()) break;
