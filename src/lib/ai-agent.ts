@@ -10,6 +10,7 @@ import {
 import { downloadMedia } from "@/lib/media-storage";
 import { mimeTypeForExtension } from "@/lib/document-mime";
 import { callGemini, getOrCreateSystemCache, type ChatTurn } from "@/lib/gemini";
+import { detectClientLanguage } from "@/lib/client-language";
 
 type RawReply = {
   reply?: string;
@@ -154,9 +155,17 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
     text: m.body,
   }));
 
+  // Forces the reply into the client's actual language instead of relying on the model to
+  // notice a rule buried deep in the system prompt — detected fresh each turn since a client
+  // can switch languages mid-conversation.
+  const clientLanguage = detectClientLanguage(recentMessages[recentMessages.length - 1].body);
+  const languageDirective = clientLanguage
+    ? ` Клиент соңғы хабарламасын ${clientLanguage === "KK" ? "қазақша" : "орысша"} тілде жазды — жауапты МІНДЕТТІ ТҮРДЕ сол тілде бер.`
+    : "";
+
   const history: ChatTurn[] = cachedContent
     ? [
-        { role: "user", text: `[Контекст: клиенттің аты — ${deal.client.fullName}]` },
+        { role: "user", text: `[Контекст: клиенттің аты — ${deal.client.fullName}.${languageDirective}]` },
         { role: "model", text: "Түсінікті." },
         ...conversationHistory,
       ]
@@ -170,7 +179,7 @@ export async function maybeSendAiReply(dealId: string): Promise<void> {
           systemPrompt: [
             settings.systemPrompt,
             "",
-            `Клиенттің аты: ${deal.client.fullName}.`,
+            `Клиенттің аты: ${deal.client.fullName}.${languageDirective}`,
             DOCUMENT_FORMAT_INSTRUCTIONS,
           ].join("\n"),
         }),

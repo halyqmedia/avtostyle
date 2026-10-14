@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessage, toWhatsAppRecipient, type WhatsAppCredentials } from "@/lib/whatsapp-cloud";
 import { callGemini, type ChatTurn } from "@/lib/gemini";
+import { detectClientLanguage } from "@/lib/client-language";
 
 const FOLLOWUP_HOURS = 4; // hours of client silence after our last message before nudging
 const MAX_FOLLOWUPS = 2; // caps nudges per silence streak — matches the script's "no more than 3 outbound in a row" rule (1 reply + 2 follow-ups)
@@ -50,10 +51,12 @@ export async function processAiFollowUps(): Promise<void> {
     // that run is our original reply, everything after it is a previously-sent nudge.
     let trailingOutCount = 0;
     let lastInboundAt: Date | null = null;
+    let lastInboundBody = "";
     for (const m of messages) {
       if (m.direction === "OUT") trailingOutCount++;
       else {
         lastInboundAt = m.createdAt;
+        lastInboundBody = m.body;
         break;
       }
     }
@@ -79,10 +82,15 @@ export async function processAiFollowUps(): Promise<void> {
       .map((m) => ({ role: m.direction === "IN" ? "user" : "model", text: m.body }));
     if (history.length === 0) continue;
 
+    const clientLanguage = detectClientLanguage(lastInboundBody);
+    const languageDirective = clientLanguage
+      ? ` Клиенттің соңғы хабарламасы ${clientLanguage === "KK" ? "қазақша" : "орысша"} болды — нудж хабарламасын МІНДЕТТІ ТҮРДЕ сол тілде жаз.`
+      : "";
+
     try {
       const reply = await callGemini({
         model: settings.model,
-        systemPrompt: [settings.systemPrompt, FOLLOWUP_INSTRUCTION].join("\n"),
+        systemPrompt: [settings.systemPrompt, FOLLOWUP_INSTRUCTION + languageDirective].join("\n"),
         history,
         maxOutputTokens: 120,
       });
