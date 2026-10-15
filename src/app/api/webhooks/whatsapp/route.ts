@@ -98,15 +98,22 @@ export async function POST(req: NextRequest) {
       const metadata = value.metadata as { phone_number_id?: string } | undefined;
 
       // Which registered number received this message decides its funnel (AI script/KP files),
-      // its default manager, and (for replies) which credentials to send back with. An
-      // unregistered/legacy number (metadata missing, or not yet added in /admin/whatsapp-numbers)
-      // falls back to the original single-funnel/env-credential behavior.
+      // its default manager, and (for replies) which credentials to send back with. Missing
+      // metadata (old payload shape / truly legacy single-number setups) falls back to the
+      // original single-funnel/env-credential behavior.
       const whatsappNumber = metadata?.phone_number_id
         ? await prisma.whatsAppNumber.findUnique({
             where: { phoneNumberId: metadata.phone_number_id },
             include: { funnel: true },
           })
         : null;
+
+      // A phone_number_id present in the payload but not registered under
+      // /admin/whatsapp-numbers belongs to a different WhatsApp Business number entirely — the
+      // same Meta app/webhook was observed forwarding another business's traffic (unrelated
+      // window/door/glass-company leads) here, which the old fallback silently absorbed into
+      // this business's default funnel. Drop it instead of adopting it.
+      if (metadata?.phone_number_id && !whatsappNumber) continue;
 
       for (const msg of messages) {
         const dealId = await handleInboundMessage(msg, contacts, whatsappNumber);
