@@ -6,10 +6,10 @@ import { normalizePhone } from "@/lib/phone";
 import { downloadMedia } from "@/lib/media-storage";
 import { hasReachedDailyTemplateCap } from "@/lib/template-send-throttle";
 
-// Pacing between sends. A number on Meta's TIER_250 messaging limit (the default until the
-// display name is approved) reads a fast burst — hundreds of sends in a few minutes — as spammy
-// and starts async-failing already-accepted messages ("Spam Rate limit hit", "healthy ecosystem
-// engagement"), not just rejecting new ones. 4s keeps well clear of that, still only ~13min/day at the cap.
+// Pacing between sends. Even on a higher-tier WABA (now TIER_1K), a fast burst — hundreds of
+// sends in a few minutes — can still read as spammy and start async-failing already-accepted
+// messages ("Spam Rate limit hit", "healthy ecosystem engagement"), not just rejecting new ones.
+// 4s keeps well clear of that, still only ~67min/day at the current 1000/day cap.
 const SEND_GAP_MS = 4000;
 
 // Guards against the same campaign being driven by two overlapping loops — the initial
